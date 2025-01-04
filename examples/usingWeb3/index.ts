@@ -2,6 +2,8 @@ import Web3 from 'web3';
 import { AbiItem } from 'web3-utils';
 import { TransactionReceipt } from 'web3-types';
 import { Sdk } from '@peaq-network/sdk';
+import { decodeAddress } from '@polkadot/util-crypto';
+import { u8aToHex } from '@polkadot/util';
 
 // Import the contract ABI
 import { abi } from '../GasStationFactoryABI.json';
@@ -206,13 +208,13 @@ const generateDIDHash = async () => {
       signature: {
         type: 'Ed25519VerificationKey2020',
         issuer: '5Df42mkztLtkksgQuLy4YV6hmhzdjYvDknoxHv1QBkaY12Pg',
-        hash: '0x12345'
+        hash: '0x12345' // replace with your issuer signature
       },
       services: [
         {
           id: '#emailSignature',
           type: 'emailSignature',
-          data: '0e816a00d228a6d215542334e51a01eb3280d202fe2324abe75bb8b4acaec4207cc00106e830d493603305f797706a0ef1952c44ea9f9b44c0b3ccc3d4bc758b'
+          data: '0e816a00d228a6d215542334e51a01eb3280d202fe2324abe75bb8b4acaec4207cc00106e830d493603305f797706a0ef1952c44ea9f9b44c0b3ccc3d4bc758b' // replace with your email signature
         },
       ]
     }
@@ -235,16 +237,20 @@ async function submitDIDTx() {
         let now = new Date().getTime();
 
         const didAddress = "5FEw7aWmqcnWDaMcwjKyGtJMjQfqYGxXmDWKVfcpnEPmUM7q";
+        const didAddressHex = decodeSubstrateAddress(didAddress);
         const didName = `did:peaq:${didAddress}#test`
         const name = ethers.hexlify(ethers.toUtf8Bytes(didName));
 
         const value = (await generateDIDHash()).value;
 
+        // converted the original did value to bytes and then hex to retain the original value during decoding
+        const didVal = ethers.keccak256(ethers.toUtf8Bytes(value));
+
         const validityFor = 0;
 
         const params = abiCoder.encode(
         ["address", "bytes", "bytes", "uint32"],
-        [didAddress, name, value, validityFor]
+        [didAddressHex, name, didVal, validityFor]
         );
 
         const calldata = params.replace("0x", createDidFunctionSelector);
@@ -257,6 +263,13 @@ async function submitDIDTx() {
     } catch (error) {
         console.error('Error:', error);
     }
+}
+
+function decodeSubstrateAddress(ss58Address: string): string {
+    const publicKeyU8a = decodeAddress(ss58Address);
+    const publicKeyHex = u8aToHex(publicKeyU8a);
+
+    return publicKeyHex;
 }
 
 
