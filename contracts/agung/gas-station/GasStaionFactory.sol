@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.25;
+pragma solidity 0.8.25;
 
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
@@ -14,8 +14,8 @@ interface IERC20 {
 }
 
 contract GasStationFactory {
-    uint256 constant MIN_BALANCE = 0.33 * 1e18; // 0.33 tokens in 18 decimals
-    uint256 constant FUNDING_AMOUNT = 0.5 * 1e18; // 0.5 tokens in 18 decimals
+    uint256 constant MIN_BALANCE = 330000000000000000; // 0.33 tokens in 18 decimals
+    uint256 constant FUNDING_AMOUNT = 500000000000000000; // 0.5 tokens in 18 decimals
     address constant PEAQ_RBAC =
         address(0x0000000000000000000000000000000000000802); // peaq RBAC contract address
     address constant PEAQ_DID =
@@ -39,34 +39,38 @@ contract GasStationFactory {
     );
     event MachineSmartAccountDeployed(address indexed deployedAddress);
 
+    error ZeroAddress();
+    error NonceAlreadyUsed(uint256 nonce);
+    error InvalidSignature(bytes32 messageHash, uint256 nonce);
+    error TransferFailed(address token, address recipient, uint256 amount);
+    error OnlyOwner(address caller);
+    error OnlyGasStation(address caller);
+
     modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call this function");
+        if (msg.sender != owner) {
+            revert OnlyOwner(msg.sender); // Only owner can call this function
+        }
         _;
     }
 
     modifier onlyGasStation() {
-        require(
-            msg.sender == gasStation,
-            "Only gas station can call this function"
-        );
+        if (msg.sender != gasStation) {
+            revert OnlyGasStation(msg.sender); // Only gas station can call this function
+        }
         _;
     }
 
     constructor(address _owner, address _gasStation) {
-        require(_owner != address(0), "Owner address cannot be zero");
-        require(
-            _gasStation != address(0),
-            "Gas station address cannot be zero"
-        );
+        if (_owner == address(0)) revert ZeroAddress(); // Owner address cannot be zero
+        if (_gasStation == address(0)) revert ZeroAddress(); // Gas station address cannot be zero
+
         owner = _owner;
         gasStation = _gasStation;
     }
 
     function changeGasStation(address newGasStation) external onlyOwner {
-        require(
-            newGasStation != address(0),
-            "New gas station address cannot be zero"
-        );
+        if (newGasStation == address(0)) revert ZeroAddress(); // New gas station address cannot be zero
+
         emit GasStationChanged(gasStation, newGasStation);
         gasStation = newGasStation;
     }
@@ -81,20 +85,16 @@ contract GasStationFactory {
         uint256 nonce,
         bytes calldata signature
     ) external returns (address) {
-        require(
-            eoa != address(0),
-            "EOA (machine owner) address cannot be zero"
-        );
+        if (eoa == address(0)) revert ZeroAddress(); // EOA (machine owner) address cannot be zero
 
         // verify that the gas station owner approves this tx
         bytes32 messageHash = keccak256(
             abi.encodePacked(address(this), eoa, nonce)
         );
 
-        require(
-            _verifySignature(messageHash, signature, nonce),
-            "Invalid Gas Station Owner signature"
-        );
+        if (!_verifySignature(messageHash, signature, nonce)) {
+            revert InvalidSignature(messageHash, nonce); // Invalid Gas Station Owner signature
+        }
 
         usedNonces[nonce] = true;
 
@@ -118,36 +118,24 @@ contract GasStationFactory {
         uint256 nonce,
         bytes calldata signature
     ) external onlyOwner {
-        require(
-            newGasStationAddress != address(0),
-            "New Gas Station address cannot be zero"
-        );
-        require(!usedNonces[nonce], "Nonce already used");
+        if (FUNDING_TOKEN == address(0)) revert ZeroAddress(); // Funding token address cannot be zero
+        if (newGasStationAddress == address(0)) revert ZeroAddress(); // New Gas Station address cannot be zero
+        if (usedNonces[nonce]) revert NonceAlreadyUsed(nonce); // Nonce already used
 
         // Verify the owner's signature
         bytes32 messageHash = keccak256(
             abi.encodePacked(address(this), newGasStationAddress, nonce)
         );
-        require(
-            _verifySignature(messageHash, signature, nonce),
-            "Invalid Gas Station Owner signature"
-        );
 
+        if (!_verifySignature(messageHash, signature, nonce)) {
+            revert InvalidSignature(messageHash, nonce); // Invalid Gas Station Owner signature
+        }
         usedNonces[nonce] = true;
-
-        // Transfer tokens with balance validation
-        require(
-            FUNDING_TOKEN != address(0),
-            "Funding token address cannot be zero"
-        );
 
         // Check gas station's balance
         uint256 gasStationBalance = IERC20(FUNDING_TOKEN).balanceOf(
             address(this)
         );
-
-        // make sure there's a little balance left to pay tx fees
-        //uint256 amount = gasStationBalance - 1e16;
 
         // Perform the token transfer
         bool success = IERC20(FUNDING_TOKEN).transfer(
@@ -155,7 +143,13 @@ contract GasStationFactory {
             gasStationBalance
         );
 
-        require(success, "Transfer failed");
+        if (!success) {
+            revert TransferFailed(
+                FUNDING_TOKEN,
+                newGasStationAddress,
+                gasStationBalance
+            );
+        }
     }
 
     /**
@@ -175,22 +169,19 @@ contract GasStationFactory {
         bytes calldata signature,
         bytes calldata eoaSignature
     ) external onlyGasStation {
-        require(machineAddress != address(0), "Machine address cannot be zero");
-        require(
-            eoa != address(0),
-            "EOA (machine owner) address cannot be zero"
-        );
-        require(target != address(0), "Target address cannot be zero");
-        require(!usedNonces[nonce], "Nonce already used");
+        if (machineAddress == address(0)) revert ZeroAddress(); // Machine address cannot be zero
+        if (eoa == address(0)) revert ZeroAddress(); // EOA (machine owner) address cannot be zero
+        if (target == address(0)) revert ZeroAddress(); // Target address cannot be zero
+        if (usedNonces[nonce]) revert NonceAlreadyUsed(nonce); // Nonce already used
 
         // Verify the owner's signature
         bytes32 messageHash = keccak256(
             abi.encodePacked(address(this), eoa, target, data, nonce)
         );
-        require(
-            _verifySignature(messageHash, signature, nonce),
-            "Invalid signature"
-        );
+
+        if (!_verifySignature(messageHash, signature, nonce)) {
+            revert InvalidSignature(messageHash, nonce); // Invalid Gas Station Owner signature
+        }
 
         usedNonces[nonce] = true;
 
@@ -202,8 +193,6 @@ contract GasStationFactory {
                 target == PEAQ_RBAC ||
                 target == PEAQ_STORAGE)
         ) {
-            require(machineAddress != address(0), "Invalid machine address");
-
             // Fetch machine's balance
             uint256 machineBalance = IERC20(FUNDING_TOKEN).balanceOf(
                 machineAddress
@@ -238,7 +227,7 @@ contract GasStationFactory {
         bytes memory signature,
         uint256 nonce
     ) internal view returns (bool) {
-        require(!usedNonces[nonce], "Nonce already used");
+        if (usedNonces[nonce]) revert NonceAlreadyUsed(nonce); // Nonce already used
 
         bytes32 hash = MessageHashUtils.toEthSignedMessageHash(messageHash);
         address signer = ECDSA.recover(hash, signature);
