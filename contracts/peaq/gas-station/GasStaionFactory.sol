@@ -37,6 +37,7 @@ contract GasStationFactory {
         address indexed previousGasStation,
         address indexed newGasStation
     );
+    event OwnerChanged(address indexed previousOwner, address indexed newOwner);
     event MachineSmartAccountDeployed(address indexed deployedAddress);
 
     error ZeroAddress();
@@ -66,6 +67,13 @@ contract GasStationFactory {
 
         owner = _owner;
         gasStation = _gasStation;
+    }
+
+    function changeOwner(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert ZeroAddress(); // New owner address cannot be zero
+
+        emit OwnerChanged(owner, newOwner);
+        owner = newOwner;
     }
 
     function changeGasStation(address newGasStation) external onlyOwner {
