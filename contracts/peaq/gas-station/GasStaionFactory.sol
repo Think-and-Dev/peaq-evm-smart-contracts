@@ -46,6 +46,7 @@ contract GasStationFactory {
     error TransferFailed(address token, address recipient, uint256 amount);
     error OnlyOwner(address caller);
     error OnlyGasStation(address caller);
+    error TargetCallFailed(address target);
 
     modifier onlyOwner() {
         if (msg.sender != owner) {
@@ -162,13 +163,47 @@ contract GasStationFactory {
 
     /**
      * @dev Execute a transaction via the gas station factory contract.
+     * The Gas Station contract will trigger the final target call
+     * @param target The target contract address where the call data will be executed
+     * @param data The calldata for the transaction sent to the target contract address
+     * @param signature The signature verifying the owner's tx approval.
+     */
+    function executeTransaction(
+        address target,
+        bytes calldata data,
+        uint256 nonce,
+        bytes calldata signature
+    ) external onlyGasStation {
+        if (target == address(0)) revert ZeroAddress(); // Target address cannot be zero
+        if (usedNonces[nonce]) revert NonceAlreadyUsed(nonce); // Nonce already used
+
+        // Verify the owner's signature
+        bytes32 messageHash = keccak256(
+            abi.encodePacked(address(this), target, data, nonce)
+        );
+
+        if (!_verifySignature(messageHash, signature, nonce)) {
+            revert InvalidSignature(messageHash, nonce); // Invalid Gas Station Owner signature
+        }
+
+        usedNonces[nonce] = true;
+        (bool success, ) = target.call(data);
+
+        if (!success) {
+            revert TargetCallFailed(target);
+        }
+    }
+
+    /**
+     * @dev Execute a machine transaction via the gas station factory contract.
+     * The Machine Smart Account will trigger the final target call
      * @param eoa The user (machine owner) on whose behalf the transaction is executed.
      * @param target The target contract address where the call data will be executed
      * @param data The calldata for the transaction sent to the target contract address
      * @param signature The signature verifying the owner's tx approval.
      * @param eoaSignature The signature verifying the eoa (machine owner) tx approval.
      */
-    function executeTransaction(
+    function executeMachineTransaction(
         address eoa,
         address machineAddress,
         address target,
