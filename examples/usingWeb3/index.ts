@@ -307,7 +307,7 @@ async function submitDIDTx() {
         const value = (await generateDIDHash()).value;
 
         // converted the original did value to bytes and then hex to retain the original value during decoding
-        const didVal = ethers.keccak256(ethers.toUtf8Bytes(value));
+        const didVal = ethers.hexlify(ethers.toUtf8Bytes(value));
 
         const validityFor = 0;
 
