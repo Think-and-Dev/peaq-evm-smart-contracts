@@ -12,7 +12,9 @@ import { AbiCoder, ethers } from 'ethers';
 let machineAddress = "" // to be replaced after submitDeployMachineSmartAccountTx is triggered
 
 // Web3 setup
-const web3 = new Web3('YOUR_ETHEREUM_NODE_URL'); // Replace with your Ethereum node URL
+// for agung: https://erpc-async.agung.peaq.network
+// for peaq: https://peaq.api.onfinality.io/public
+const web3 = new Web3('https://erpc-async.agung.peaq.network');
 
 // Contract details
 const GasStationFactoryContractAddress: string = 'CONTRACT_ADDRESS'; // Replace with the deployed Gas station factory contract address
@@ -102,6 +104,19 @@ async function deployMachineSmartAccount(
 }
 
 async function executeTransaction(
+    target: string,
+    data: string,
+    nonce: number,
+    signature: string,
+): Promise<void> {
+    const methodData = contract.methods
+        .executeTransaction(target, data, nonce, signature)
+        .encodeABI();
+    const receipt = await sendTransaction(methodData, 500000);
+    console.log('Transaction executed:', receipt);
+}
+
+async function executeMachineTransaction(
     eoa: string,
     machineAddress: string,
     target: string,
@@ -117,7 +132,19 @@ async function executeTransaction(
     console.log('Transaction executed:', receipt);
 }
 
-function generateOwnerSignature(eoa: string, target: string, data: string, nonce: number): string {
+function generateOwnerSignature(target: string, data: string, nonce: number): string {
+
+    const messageHash =  ethers.solidityPackedKeccak256(
+        ["address", "address", "bytes", "uint256"],
+        [GasStationFactoryContractAddress, target, data, nonce]
+    );
+
+    const signature = ownerAccount.sign(messageHash).signature;
+
+    return signature
+}
+
+function generateOwnerSignatureForMachineTx(eoa: string, target: string, data: string, nonce: number): string {
 
     const messageHash =  ethers.solidityPackedKeccak256(
         ["address", "address", "address", "bytes", "uint256"],
@@ -161,7 +188,43 @@ async function submitDeployMachineSmartAccountTx() {
     machineAddress = await deployMachineSmartAccount(eoa, nonce, deploySignature);
 
 }
-    async function submitStorageTx() {
+
+async function submitGetRealStorageTx() {
+    try {
+        const nonce = 1; // Example nonce
+        const target = '0x0000000000000000000000000000000000000801'; // Replace with the target contract address
+
+        const abiCoder = new AbiCoder()
+
+        const addItemFunctionSignature = "addItem(bytes,bytes)";
+        const addItemFunctionSelector = ethers.keccak256(ethers.toUtf8Bytes(addItemFunctionSignature)).substring(0, 10);
+
+        let now = new Date().getTime();
+
+        const itemType = "GET-REAL-CAMPAIGN-ITEM-TYPE" + now
+        const itemTypeHex = ethers.hexlify(ethers.toUtf8Bytes(itemType));
+        const item = "TASK-COMPLETED"
+        const itemHex = ethers.hexlify(ethers.toUtf8Bytes(item));
+
+        const params = abiCoder.encode(
+            ["bytes", "bytes"],
+            [itemTypeHex, itemHex]
+        );
+
+        const calldata = params.replace("0x", addItemFunctionSelector);
+        
+
+        const eoaSignature = generateEoaSignature(machineAddress, target, calldata, nonce)
+        const ownerSignature = generateOwnerSignature(target, calldata, nonce)
+
+        await executeTransaction(target, calldata, nonce, ownerSignature,);
+    } catch (error) {
+        console.error('Error:', error);
+    }
+
+}
+
+async function submitMachineStorageTx() {
     try {
         const eoa = '0xEOAAddress'; // Replace with actual EOA (machine owner) address - EOA == "Externally Owned Address"
         const nonce = 1; // Example nonce
@@ -188,9 +251,9 @@ async function submitDeployMachineSmartAccountTx() {
         
 
         const eoaSignature = generateEoaSignature(machineAddress, target, calldata, nonce)
-        const ownerSignature = generateOwnerSignature(eoa, target, calldata, nonce)
+        const ownerSignature = generateOwnerSignatureForMachineTx(eoa, target, calldata, nonce)
 
-        await executeTransaction(eoa, machineAddress, target, calldata, nonce, ownerSignature, eoaSignature);
+        await executeMachineTransaction(eoa, machineAddress, target, calldata, nonce, ownerSignature, eoaSignature);
     } catch (error) {
         console.error('Error:', error);
     }
@@ -256,10 +319,10 @@ async function submitDIDTx() {
         const calldata = params.replace("0x", createDidFunctionSelector);
 
         
-        const eoaSignature = generateEoaSignature(machineAddress, target, calldata, nonce)
-        const ownerSignature = generateOwnerSignature(eoa, target, calldata, nonce)
+        const eoaSignature = generateEoaSignature(machineAddress, target, calldata, nonce);
+        const ownerSignature = generateOwnerSignatureForMachineTx(eoa, target, calldata, nonce);
 
-        await executeTransaction(eoa, machineAddress, target, calldata, nonce, ownerSignature, eoaSignature);
+        await executeMachineTransaction(eoa, machineAddress, target, calldata, nonce, ownerSignature, eoaSignature);
     } catch (error) {
         console.error('Error:', error);
     }
@@ -277,7 +340,11 @@ function decodeSubstrateAddress(ss58Address: string): string {
 (async () => {
 
     await submitDeployMachineSmartAccountTx();
-    await submitStorageTx();
+    await submitMachineStorageTx();
     await submitDIDTx();
+
+    // Submit tx that doesn't require the machine smart account to trigger the target call
+    await submitGetRealStorageTx();
+
     
 })();
