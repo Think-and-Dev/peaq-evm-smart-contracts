@@ -25,7 +25,7 @@ contract GasStationFactory {
     address constant FUNDING_TOKEN =
         address(0x0000000000000000000000000000000000000809); // AGUNG token contract address
     address public owner; // Owner of the Gas station Factory
-    address public gasStation; // Authorized relayer or gas station address that authorize all tx
+    mapping(address => bool) public gasStations; // Authorized relayer or gas station address that authorize all tx
     mapping(uint256 => bool) private usedNonces; // nonces used for replay protection
     event MetaTransactionExecuted(
         address indexed user,
@@ -33,10 +33,8 @@ contract GasStationFactory {
         address target,
         bytes functionCall
     );
-    event GasStationChanged(
-        address indexed previousGasStation,
-        address indexed newGasStation
-    );
+    event GasStationAdded(address indexed newGasStation);
+    event GasStationRemoved(address indexed oldGasStation);
     event OwnerChanged(address indexed previousOwner, address indexed newOwner);
     event MachineSmartAccountDeployed(address indexed deployedAddress);
 
@@ -44,6 +42,7 @@ contract GasStationFactory {
     error NonceAlreadyUsed(uint256 nonce);
     error InvalidSignature(bytes32 messageHash, uint256 nonce);
     error TransferFailed(address token, address recipient, uint256 amount);
+    error GasStationDontExist(address gasStation);
     error OnlyOwner(address caller);
     error OnlyGasStation(address caller);
     error TargetCallFailed(address target);
@@ -56,7 +55,7 @@ contract GasStationFactory {
     }
 
     modifier onlyGasStation() {
-        if (msg.sender != gasStation) {
+        if (!gasStations[msg.sender]) {
             revert OnlyGasStation(msg.sender); // Only gas station can call this function
         }
         _;
@@ -67,7 +66,7 @@ contract GasStationFactory {
         if (_gasStation == address(0)) revert ZeroAddress(); // Gas station address cannot be zero
 
         owner = _owner;
-        gasStation = _gasStation;
+        gasStations[_gasStation] = true;
     }
 
     function changeOwner(address newOwner) external onlyOwner {
@@ -77,11 +76,18 @@ contract GasStationFactory {
         owner = newOwner;
     }
 
-    function changeGasStation(address newGasStation) external onlyOwner {
+    function addGasStation(address newGasStation) external onlyOwner {
         if (newGasStation == address(0)) revert ZeroAddress(); // New gas station address cannot be zero
 
-        emit GasStationChanged(gasStation, newGasStation);
-        gasStation = newGasStation;
+        emit GasStationAdded(newGasStation);
+        gasStations[newGasStation] = true;
+    }
+
+    function removeGasStation(address gasStation) external onlyOwner {
+        if (gasStation == address(0)) revert ZeroAddress(); // gas station address cannot be zero
+
+        emit GasStationRemoved(gasStation);
+        delete (gasStations[gasStation]);
     }
 
     /**
