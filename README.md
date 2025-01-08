@@ -1,13 +1,16 @@
-## Foundry
+# PEAQ EVM Smart Contracts
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This repository contains the smart contracts for PEAQ's EVM Gas Station implementation, built using Foundry.
 
-Foundry consists of:
+## Overview
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+The Gas Station Factory enables gasless transactions for machines on the PEAQ network, allowing them to execute transactions without holding native tokens. Key features include:
+
+- Machine Smart Account deployment
+- Gasless transaction execution
+- Balance management for gas station operations
+- EIP-712 compliant signatures
+- Role-based access control
 
 ## Documentation
 
