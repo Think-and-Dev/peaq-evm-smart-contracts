@@ -3,6 +3,7 @@ pragma solidity 0.8.25;
 
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import {Errors} from "../libs/Errors.sol";
 
 contract MachineSmartAccount {
     using ECDSA for bytes32;
@@ -11,15 +12,9 @@ contract MachineSmartAccount {
     address public entryPoint;
     mapping(uint256 => bool) public usedNonces;
 
-    error ZeroAddress();
-    error NonceAlreadyUsed(uint256 nonce);
-    error InvalidSignature(bytes32 messageHash, uint256 nonce);
-    error NotAuthorized(address caller);
-    error TargetCallFailed(address target);
-
     constructor(address _owner, address _entryPoint) {
-        if (_owner == address(0)) revert ZeroAddress(); // Owner address cannot be zero
-        if (_entryPoint == address(0)) revert ZeroAddress(); // EntryPoint cannot be zero
+        if (_owner == address(0)) revert Errors.ZeroAddress(); // Owner address cannot be zero
+        if (_entryPoint == address(0)) revert Errors.ZeroAddress(); // EntryPoint cannot be zero
         owner = _owner;
         entryPoint = _entryPoint;
     }
@@ -30,12 +25,8 @@ contract MachineSmartAccount {
      * @param signature The signature to verify.
      * @param nonce Protects against replay attack.
      */
-    function validateUserOp(
-        bytes32 userOpHash,
-        bytes memory signature,
-        uint256 nonce
-    ) public view returns (bool) {
-        if (usedNonces[nonce]) revert NonceAlreadyUsed(nonce); // Nonce already used
+    function validateUserOp(bytes32 userOpHash, bytes memory signature, uint256 nonce) public view returns (bool) {
+        if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
 
         bytes32 hash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
         address signer = ECDSA.recover(hash, signature);
@@ -50,31 +41,24 @@ contract MachineSmartAccount {
      * @param signature The signature verifying the eoa (machine owner) tx approval.
      * @param nonce Protects against replay attack.
      */
-    function execute(
-        address target,
-        bytes calldata data,
-        uint256 nonce,
-        bytes calldata signature
-    ) external {
+    function execute(address target, bytes calldata data, uint256 nonce, bytes calldata signature) external {
         if (msg.sender != entryPoint && msg.sender != owner) {
-            revert NotAuthorized(msg.sender);
+            revert Errors.NotAuthorized(msg.sender);
         }
 
-        if (usedNonces[nonce]) revert NonceAlreadyUsed(nonce); // Nonce already used
+        if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
 
-        bytes32 userOpHash = keccak256(
-            abi.encodePacked(address(this), target, data, nonce)
-        );
+        bytes32 userOpHash = keccak256(abi.encodePacked(address(this), target, data, nonce));
         if (!validateUserOp(userOpHash, signature, nonce)) {
-            revert InvalidSignature(userOpHash, nonce); // Invalid EOA (machine owner) signature
+            revert Errors.InvalidSignature(userOpHash, nonce); // Invalid EOA (machine owner) signature
         }
 
         usedNonces[nonce] = true;
 
-        (bool success, ) = target.call(data);
+        (bool success,) = target.call(data);
 
         if (!success) {
-            revert TargetCallFailed(target);
+            revert Errors.TargetCallFailed(target);
         }
     }
 }

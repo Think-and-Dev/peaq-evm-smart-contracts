@@ -5,8 +5,8 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
-import {MachineSmartAccount} from "./MachineSmartAccount.sol";
-import {Errors} from "../libs/Errors.sol";
+import {MachineSmartAccount} from "../MachineSmartAccount.sol";
+import {Errors} from "../../libs/Errors.sol";
 
 contract GasStationFactory is EIP712, AccessControl {
     using SafeERC20 for IERC20;
@@ -26,7 +26,7 @@ contract GasStationFactory is EIP712, AccessControl {
         "ExecuteMachineTransaction(address eoa,address machineAddress,address target,bytes data,uint256 nonce)"
     );
 
-    uint256 constant MIN_BALANCE = 10000000000000000; // 0.01 tokens in 18 decimals
+    uint256 constant MIN_BALANCE = 330000000000000000; // 0.33 tokens in 18 decimals
     uint256 constant FUNDING_AMOUNT = 50000000000000000; // 0.05 tokens in 18 decimals
     address constant PEAQ_RBAC = address(0x0000000000000000000000000000000000000802); // peaq RBAC contract address
     address constant PEAQ_DID = address(0x0000000000000000000000000000000000000800); // peaq DID contract address
