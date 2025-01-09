@@ -2,7 +2,7 @@
 pragma solidity 0.8.25;
 
 import {Test} from "forge-std/Test.sol";
-import {GasStationFactory} from "../src/gas-station/mainnet/GasStationFactory.sol";
+import {GasStationFactory} from "../src/gas-station/GasStationFactory.sol";
 import {MachineSmartAccount} from "../src/gas-station/MachineSmartAccount.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
