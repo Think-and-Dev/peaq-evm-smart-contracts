@@ -2,7 +2,7 @@
 pragma solidity 0.8.25;
 
 import {Script, console} from "forge-std/Script.sol";
-import {GasStationFactory} from "../src/gas-station/GasStationFactory.sol";
+import {GasStationFactory} from "../src/gas-station/mainnet/GasStationFactory.sol";
 
 contract DeployGasStation is Script {
     function run() external returns (GasStationFactory) {
