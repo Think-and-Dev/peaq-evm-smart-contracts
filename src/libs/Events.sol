@@ -8,6 +8,12 @@ library Events {
         address target,
         bytes functionCall
     );
+    event MachineBalanceTransferred(
+        address indexed machineAddress,
+        address indexed recipientAddress,
+        uint256 amount,
+        uint256 nonce
+    );
     event MachineSmartAccountDeployed(address indexed deployedAddress);
     event GasStationBalanceTransferred(
         address indexed oldGasStation,

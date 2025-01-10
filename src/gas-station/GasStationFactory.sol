@@ -8,6 +8,7 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {MachineSmartAccount} from "./MachineSmartAccount.sol";
 import {Errors} from "../libs/Errors.sol";
 import {Events} from "../libs/Events.sol";
+import {Constants} from "../libs/Constants.sol";
 
 contract GasStationFactory is EIP712, AccessControl {
     using SafeERC20 for IERC20;
@@ -33,17 +34,6 @@ contract GasStationFactory is EIP712, AccessControl {
             "ExecuteMachineTransaction(address eoa,address machineAddress,address target,bytes data,uint256 nonce)"
         );
 
-    uint256 constant MIN_BALANCE = 10000000000000000; // 0.01 tokens in 18 decimals
-    uint256 constant FUNDING_AMOUNT = 50000000000000000; // 0.05 tokens in 18 decimals
-    address constant PEAQ_RBAC =
-        address(0x0000000000000000000000000000000000000802); // peaq RBAC contract address
-    address constant PEAQ_DID =
-        address(0x0000000000000000000000000000000000000800); // peaq DID contract address
-    address constant PEAQ_STORAGE =
-        address(0x0000000000000000000000000000000000000801); // peaq storage contract address
-    address constant FUNDING_TOKEN =
-        address(0x0000000000000000000000000000000000000809); // PEAQ token contract address
-
     //bool public gasStationDepreceted;
     mapping(uint256 => bool) private usedNonces;
 
@@ -52,6 +42,7 @@ contract GasStationFactory is EIP712, AccessControl {
         address gasStation
     ) EIP712("GasStationFactory", "1") {
         if (admin == address(0)) revert Errors.ZeroAddress();
+        if (gasStation == address(0)) revert Errors.ZeroAddress();
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(GAS_STATION_ROLE, gasStation);
     }
@@ -100,7 +91,7 @@ contract GasStationFactory is EIP712, AccessControl {
         uint256 nonce,
         bytes calldata signature
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (FUNDING_TOKEN == address(0)) revert Errors.ZeroAddress();
+        if (Constants.FUNDING_TOKEN == address(0)) revert Errors.ZeroAddress();
         if (newGasStationAddress == address(0)) revert Errors.ZeroAddress();
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce);
 
@@ -113,10 +104,10 @@ contract GasStationFactory is EIP712, AccessControl {
         }
         usedNonces[nonce] = true;
 
-        uint256 gasStationBalance = IERC20(FUNDING_TOKEN).balanceOf(
+        uint256 gasStationBalance = IERC20(Constants.FUNDING_TOKEN).balanceOf(
             address(this)
         );
-        IERC20(FUNDING_TOKEN).safeTransfer(
+        IERC20(Constants.FUNDING_TOKEN).safeTransfer(
             newGasStationAddress,
             gasStationBalance
         );
@@ -210,24 +201,24 @@ contract GasStationFactory is EIP712, AccessControl {
         // Transfer tokens with balance validation
         // This transfer is only done if the target address is peaq did, rbac or storage contract call
         if (
-            FUNDING_TOKEN != address(0) &&
-            (target == PEAQ_DID ||
-                target == PEAQ_RBAC ||
-                target == PEAQ_STORAGE)
+            Constants.FUNDING_TOKEN != address(0) &&
+            (target == Constants.PEAQ_DID ||
+                target == Constants.PEAQ_RBAC ||
+                target == Constants.PEAQ_STORAGE)
         ) {
             // Fetch machine's balance
-            uint256 machineBalance = IERC20(FUNDING_TOKEN).balanceOf(
+            uint256 machineBalance = IERC20(Constants.FUNDING_TOKEN).balanceOf(
                 machineAddress
             );
 
             // Check if the machine balance is less than min balance before funding it
             // This is added because each machine account is required to pay a storage deposit fees by the peaq storage and did contracts.
             // the storage
-            if (machineBalance <= MIN_BALANCE) {
+            if (machineBalance <= Constants.MIN_BALANCE) {
                 // Fund the machine adress balance
-                IERC20(FUNDING_TOKEN).safeTransfer(
+                IERC20(Constants.FUNDING_TOKEN).safeTransfer(
                     machineAddress,
-                    FUNDING_AMOUNT
+                    Constants.FUNDING_AMOUNT
                 );
             }
         }
