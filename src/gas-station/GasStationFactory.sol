@@ -7,6 +7,7 @@ import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeE
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {MachineSmartAccount} from "./MachineSmartAccount.sol";
 import {Errors} from "../libs/Errors.sol";
+import {Events} from "../libs/Events.sol";
 
 contract GasStationFactory is EIP712, AccessControl {
     using SafeERC20 for IERC20;
@@ -46,28 +47,6 @@ contract GasStationFactory is EIP712, AccessControl {
     //bool public gasStationDepreceted;
     mapping(uint256 => bool) private usedNonces;
 
-    event MetaTransactionExecuted(
-        address indexed user,
-        address indexed relayer,
-        address target,
-        bytes functionCall
-    );
-    event MachineSmartAccountDeployed(address indexed deployedAddress);
-    event GasStationBalanceTransferred(
-        address indexed oldGasStation,
-        address indexed newGasStation,
-        uint256 amount,
-        uint256 nonce
-    );
-    event TransactionExecuted(
-        address indexed target,
-        bytes data,
-        uint256 nonce,
-        address indexed executor
-    );
-    event OnReceivedCall();
-    event OnFailbackCall();
-
     constructor(
         address admin,
         address gasStation
@@ -105,7 +84,9 @@ contract GasStationFactory is EIP712, AccessControl {
             address(this)
         );
 
-        emit MachineSmartAccountDeployed(address(newMachineSmartAccount));
+        emit Events.MachineSmartAccountDeployed(
+            address(newMachineSmartAccount)
+        );
         return address(newMachineSmartAccount);
     }
 
@@ -140,7 +121,7 @@ contract GasStationFactory is EIP712, AccessControl {
             gasStationBalance
         );
 
-        emit GasStationBalanceTransferred(
+        emit Events.GasStationBalanceTransferred(
             address(this),
             newGasStationAddress,
             gasStationBalance,
@@ -184,7 +165,7 @@ contract GasStationFactory is EIP712, AccessControl {
             revert Errors.TargetCallFailed(target);
         }
 
-        emit TransactionExecuted(target, data, nonce, msg.sender);
+        emit Events.TransactionExecuted(target, data, nonce, msg.sender);
     }
 
     /**
@@ -283,11 +264,11 @@ contract GasStationFactory is EIP712, AccessControl {
     // receive() and fallback() is added to adhere to contract standard
     // A receive function to accept native tokens
     receive() external payable {
-        emit OnReceivedCall();
+        emit Events.OnReceivedCall();
     }
 
     // A fallback function to handle other unexpected calls
     fallback() external payable {
-        emit OnFailbackCall();
+        emit Events.OnFailbackCall();
     }
 }
