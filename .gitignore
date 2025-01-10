@@ -2,7 +2,6 @@
 cache/
 out/
 bin
-node_modules
 examples/js/node_modules
 # Ignores development broadcast logs
 !/broadcast
