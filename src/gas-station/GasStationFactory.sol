@@ -192,12 +192,17 @@ contract GasStationFactory is EIP712, AccessControl {
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
 
         // Verify the owner's signature
-        bytes32 messageHash = keccak256(
-            abi.encodePacked(address(this), eoa, target, data, nonce)
+        bytes32 structHash = keccak256(
+            abi.encode(
+                EXECUTE_MACHINE_TRANSACTION_TYPEHASH,
+                target,
+                keccak256(data),
+                nonce
+            )
         );
 
-        if (!_verifySignature(messageHash, signature, nonce)) {
-            revert Errors.InvalidSignature(messageHash, nonce); // Invalid Gas Station Owner signature
+        if (!_verifySignature(structHash, signature, nonce)) {
+            revert Errors.InvalidSignature(structHash, nonce); // Invalid Gas Station Owner signature
         }
 
         usedNonces[nonce] = true;
