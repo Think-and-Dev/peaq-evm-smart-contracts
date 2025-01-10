@@ -21,14 +21,31 @@ contract GasStationFactoryTest is Test {
     uint256 public userPrivateKey;
 
     // EIP-712 type hashes
-    bytes32 constant DEPLOY_MACHINE_TYPEHASH = keccak256("DeployMachineSmartAccount(address eoa,uint256 nonce)");
-    bytes32 constant TRANSFER_BALANCE_TYPEHASH =
-        keccak256("TransferGasStationBalance(address newGasStationAddress,uint256 nonce)");
-    bytes32 constant EXECUTE_TRANSACTION_TYPEHASH =
-        keccak256("ExecuteTransaction(address target,bytes data,uint256 nonce)");
-    bytes32 constant EXECUTE_MACHINE_TRANSACTION_TYPEHASH = keccak256(
-        "ExecuteMachineTransaction(address eoa,address machineAddress,address target,bytes data,uint256 nonce)"
-    );
+    // EIP-712 type hashes
+    bytes32 private constant DEPLOY_MACHINE_TYPEHASH =
+        keccak256(
+            "DeployMachineSmartAccount(address machineOwner,uint256 nonce)"
+        );
+
+    bytes32 private constant TRANSFER_BALANCE_TYPEHASH =
+        keccak256(
+            "TransferGasStationBalance(address newGasStationAddress,uint256 nonce)"
+        );
+
+    bytes32 private constant EXECUTE_TRANSACTION_TYPEHASH =
+        keccak256(
+            "ExecuteTransaction(address target,bytes data,uint256 nonce)"
+        );
+
+    bytes32 private constant EXECUTE_MACHINE_TRANSACTION_TYPEHASH =
+        keccak256(
+            "ExecuteMachineTransaction(address machineOwner,address machineAddress,address target,bytes data,uint256 nonce)"
+        );
+
+    bytes32 private constant EXECUTE_MACHINE_TRANSFER_TYPEHASH =
+        keccak256(
+            "ExecutexecuteMachineTransferBalance(address machineOwner,address machineAddress,address recipientAddress,uint256 nonce"
+        );
 
     function setUp() public {
         adminPrivateKey = 0x1;
@@ -48,7 +65,9 @@ contract GasStationFactoryTest is Test {
         uint256 amount = 100 ether;
 
         //  mock ERC20 at the FUNDING_TOKEN address (0x809)
-        address fundingToken = address(0x0000000000000000000000000000000000000809);
+        address fundingToken = address(
+            0x0000000000000000000000000000000000000809
+        );
         MockERC20 token = new MockERC20("PEAQ Token", "PEAQ");
 
         // Etch the mock token to the FUNDING_TOKEN address
@@ -57,9 +76,14 @@ contract GasStationFactoryTest is Test {
         // Mint tokens to the factory contract using the mocked token at FUNDING_TOKEN address
         MockERC20(fundingToken).mint(address(factory), amount);
 
-        bytes32 structHash = keccak256(abi.encode(TRANSFER_BALANCE_TYPEHASH, newGasStation, nonce));
+        bytes32 structHash = keccak256(
+            abi.encode(TRANSFER_BALANCE_TYPEHASH, newGasStation, nonce)
+        );
 
-        bytes32 digest = _hashTypedDataV4(factory.getDomainSeparator(), structHash);
+        bytes32 digest = _hashTypedDataV4(
+            factory.getDomainSeparator(),
+            structHash
+        );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(adminPrivateKey, digest);
         bytes memory signature = abi.encodePacked(r, s, v);
 
@@ -76,9 +100,19 @@ contract GasStationFactoryTest is Test {
         bytes memory data = abi.encodeWithSignature("someFunction()");
         uint256 nonce = 0;
 
-        bytes32 structHash = keccak256(abi.encode(EXECUTE_TRANSACTION_TYPEHASH, target, keccak256(data), nonce));
+        bytes32 structHash = keccak256(
+            abi.encode(
+                EXECUTE_TRANSACTION_TYPEHASH,
+                target,
+                keccak256(data),
+                nonce
+            )
+        );
 
-        bytes32 digest = _hashTypedDataV4(factory.getDomainSeparator(), structHash);
+        bytes32 digest = _hashTypedDataV4(
+            factory.getDomainSeparator(),
+            structHash
+        );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(adminPrivateKey, digest);
         bytes memory signature = abi.encodePacked(r, s, v);
 
@@ -92,7 +126,9 @@ contract GasStationFactoryTest is Test {
 
     function testInvalidDomainSeparator() public {
         uint256 nonce = 0;
-        bytes32 structHash = keccak256(abi.encode(DEPLOY_MACHINE_TYPEHASH, user, nonce));
+        bytes32 structHash = keccak256(
+            abi.encode(DEPLOY_MACHINE_TYPEHASH, user, nonce)
+        );
 
         // Use wrong domain separator
         bytes32 wrongDomainSeparator = keccak256("WrongDomain");
@@ -111,7 +147,10 @@ contract GasStationFactoryTest is Test {
         // Use wrong struct hash format
         bytes32 wrongStructHash = keccak256(abi.encode(user, nonce)); // Missing TYPEHASH
 
-        bytes32 digest = _hashTypedDataV4(factory.getDomainSeparator(), wrongStructHash);
+        bytes32 digest = _hashTypedDataV4(
+            factory.getDomainSeparator(),
+            wrongStructHash
+        );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(adminPrivateKey, digest);
         bytes memory signature = abi.encodePacked(r, s, v);
 
@@ -123,28 +162,51 @@ contract GasStationFactoryTest is Test {
     function testNonceReplayProtectionAcrossFunctions() public {
         uint256 nonce = 0;
 
-        bytes32 deployStructHash = keccak256(abi.encode(DEPLOY_MACHINE_TYPEHASH, user, nonce));
-        bytes32 deployDigest = _hashTypedDataV4(factory.getDomainSeparator(), deployStructHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(adminPrivateKey, deployDigest);
+        bytes32 deployStructHash = keccak256(
+            abi.encode(DEPLOY_MACHINE_TYPEHASH, user, nonce)
+        );
+        bytes32 deployDigest = _hashTypedDataV4(
+            factory.getDomainSeparator(),
+            deployStructHash
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            adminPrivateKey,
+            deployDigest
+        );
         bytes memory deploySignature = abi.encodePacked(r, s, v);
 
         vm.prank(gasStation);
         factory.deployMachineSmartAccount(user, nonce, deploySignature);
 
         address newGasStation = address(0x123);
-        bytes32 transferStructHash = keccak256(abi.encode(TRANSFER_BALANCE_TYPEHASH, newGasStation, nonce));
-        bytes32 transferDigest = _hashTypedDataV4(factory.getDomainSeparator(), transferStructHash);
+        bytes32 transferStructHash = keccak256(
+            abi.encode(TRANSFER_BALANCE_TYPEHASH, newGasStation, nonce)
+        );
+        bytes32 transferDigest = _hashTypedDataV4(
+            factory.getDomainSeparator(),
+            transferStructHash
+        );
         (v, r, s) = vm.sign(adminPrivateKey, transferDigest);
         bytes memory transferSignature = abi.encodePacked(r, s, v);
 
         vm.prank(admin);
         vm.expectRevert(); // Should revert with nonce already used
-        factory.transferGasStationBalance(newGasStation, nonce, transferSignature);
+        factory.transferGasStationBalance(
+            newGasStation,
+            nonce,
+            transferSignature
+        );
     }
 
     // helper function to create EIP-712 digest
-    function _hashTypedDataV4(bytes32 domainSeparator, bytes32 structHash) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+    function _hashTypedDataV4(
+        bytes32 domainSeparator,
+        bytes32 structHash
+    ) internal pure returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked("\x19\x01", domainSeparator, structHash)
+            );
     }
     /* fix me
     function testDeployAndExecuteMachineTransaction() public {

@@ -17,7 +17,9 @@ contract GasStationFactory is EIP712, AccessControl {
 
     // EIP-712 type hashes
     bytes32 private constant DEPLOY_MACHINE_TYPEHASH =
-        keccak256("DeployMachineSmartAccount(address eoa,uint256 nonce)");
+        keccak256(
+            "DeployMachineSmartAccount(address machineOwner,uint256 nonce)"
+        );
 
     bytes32 private constant TRANSFER_BALANCE_TYPEHASH =
         keccak256(
@@ -31,7 +33,12 @@ contract GasStationFactory is EIP712, AccessControl {
 
     bytes32 private constant EXECUTE_MACHINE_TRANSACTION_TYPEHASH =
         keccak256(
-            "ExecuteMachineTransaction(address eoa,address machineAddress,address target,bytes data,uint256 nonce)"
+            "ExecuteMachineTransaction(address machineOwner,address machineAddress,address target,bytes data,uint256 nonce)"
+        );
+
+    bytes32 private constant EXECUTE_MACHINE_TRANSFER_TYPEHASH =
+        keccak256(
+            "ExecutexecuteMachineTransferBalance(address machineOwner,address machineAddress,address recipientAddress,uint256 nonce"
         );
 
     //bool public gasStationDepreceted;
@@ -49,18 +56,18 @@ contract GasStationFactory is EIP712, AccessControl {
 
     /**
      * @dev Deploy a new Machine Smart account contract via the gas station factory contract.
-     * @param eoa The user (machine owner) on whose behalf the transaction is executed.
+     * @param machineOwner The user (machine owner) on whose behalf the transaction is executed.
      * @param signature The signature verifying the owner's tx approval.
      */
     function deployMachineSmartAccount(
-        address eoa,
+        address machineOwner,
         uint256 nonce,
         bytes calldata signature
     ) external onlyRole(GAS_STATION_ROLE) returns (address) {
-        if (eoa == address(0)) revert Errors.ZeroAddress();
+        if (machineOwner == address(0)) revert Errors.ZeroAddress();
 
         bytes32 structHash = keccak256(
-            abi.encode(DEPLOY_MACHINE_TYPEHASH, eoa, nonce)
+            abi.encode(DEPLOY_MACHINE_TYPEHASH, machineOwner, nonce)
         );
 
         if (!_verifySignature(structHash, signature, nonce)) {
@@ -71,7 +78,7 @@ contract GasStationFactory is EIP712, AccessControl {
 
         // Deploy a new instance of MachineSmartAccount
         MachineSmartAccount newMachineSmartAccount = new MachineSmartAccount(
-            eoa,
+            machineOwner,
             address(this)
         );
 
@@ -162,23 +169,23 @@ contract GasStationFactory is EIP712, AccessControl {
     /**
      * @dev Execute a machine transaction via the gas station factory contract.
      * The Machine Smart Account will trigger the final target call
-     * @param eoa The user (machine owner) on whose behalf the transaction is executed.
+     * @param machineOwner The user (machine owner) on whose behalf the transaction is executed.
      * @param target The target contract address where the call data will be executed
      * @param data The calldata for the transaction sent to the target contract address
      * @param signature The signature verifying the owner's tx approval.
-     * @param eoaSignature The signature verifying the eoa (machine owner) tx approval.
+     * @param machineOwnerSignature The signature verifying the machineOwner (machine owner) tx approval.
      */
     function executeMachineTransaction(
-        address eoa,
+        address machineOwner,
         address machineAddress,
         address target,
         bytes calldata data,
         uint256 nonce,
         bytes calldata signature,
-        bytes calldata eoaSignature
+        bytes calldata machineOwnerSignature
     ) external onlyRole(GAS_STATION_ROLE) {
         if (machineAddress == address(0)) revert Errors.ZeroAddress(); // Machine address cannot be zero
-        if (eoa == address(0)) revert Errors.ZeroAddress(); // EOA (machine owner) address cannot be zero
+        if (machineOwner == address(0)) revert Errors.ZeroAddress(); // machine owner address cannot be zero
         if (target == address(0)) revert Errors.ZeroAddress(); // Target address cannot be zero
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
 
@@ -228,7 +235,53 @@ contract GasStationFactory is EIP712, AccessControl {
             target,
             data,
             nonce,
-            eoaSignature
+            machineOwnerSignature
+        );
+    }
+
+    /**
+     * @dev Execute a machine transaction via the gas station factory contract.
+     * The Machine Smart Account will trigger the final target call
+     * @param machineOwner The user (machine owner) on whose behalf the transaction is executed.
+     * @param machineAddress The machine smart account address
+     * @param recipientAddress The recipient of the tokens
+     * @param nonce Protects against replay attack.
+     * @param signature The signature verifying the Gas Station owner's tx approval.
+     * @param machineOwnerSignature The signature verifying the machine owner tx approval.
+     */
+    function executeMachineTransferBalance(
+        address machineOwner,
+        address machineAddress,
+        address recipientAddress,
+        uint256 nonce,
+        bytes calldata signature,
+        bytes calldata machineOwnerSignature
+    ) external onlyRole(GAS_STATION_ROLE) {
+        if (machineAddress == address(0)) revert Errors.ZeroAddress(); // Machine address cannot be zero
+        if (machineOwner == address(0)) revert Errors.ZeroAddress(); // machine owner address cannot be zero
+        if (recipientAddress == address(0)) revert Errors.ZeroAddress(); // recipient address cannot be zero
+        if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
+
+        // Verify the owner's signature
+        bytes32 structHash = keccak256(
+            abi.encode(
+                EXECUTE_MACHINE_TRANSFER_TYPEHASH,
+                recipientAddress,
+                nonce
+            )
+        );
+
+        if (!_verifySignature(structHash, signature, nonce)) {
+            revert Errors.InvalidSignature(structHash, nonce); // Invalid Gas Station Owner signature
+        }
+
+        usedNonces[nonce] = true;
+
+        // Forward the call to the machine account to execute the transfer tx
+        MachineSmartAccount(machineAddress).transferMachineBalance(
+            recipientAddress,
+            nonce,
+            machineOwnerSignature
         );
     }
 
