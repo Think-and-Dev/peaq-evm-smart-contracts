@@ -14,7 +14,8 @@ contract MachineSmartAccount is EIP712, AccessControl {
 
     address public owner;
 
-    bytes32 public constant ENTRY_POINT_ROLE = keccak256("ENTRY_POINT_ROLE");
+    bytes32 public constant MACHINE_STATION_ROLE =
+        keccak256("MACHINE_STATION_ROLE");
 
     // EIP-712 type hashes
     bytes32 private constant EXECUTE_TYPEHASH =
@@ -28,12 +29,13 @@ contract MachineSmartAccount is EIP712, AccessControl {
 
     constructor(
         address _owner,
-        address _entryPoint
+        address machineStation
     ) EIP712("MachineSmartAccount", "1") {
         if (_owner == address(0)) revert Errors.ZeroAddress(); // Owner address cannot be zero
-        if (_entryPoint == address(0)) revert Errors.ZeroAddress(); // EntryPoint cannot be zero
+        if (machineStation == address(0)) revert Errors.ZeroAddress(); // Machine Station cannot be zero
         owner = _owner;
-        _grantRole(ENTRY_POINT_ROLE, _entryPoint);
+        _grantRole(DEFAULT_ADMIN_ROLE, machineStation);
+        _grantRole(MACHINE_STATION_ROLE, machineStation);
     }
 
     /**
@@ -68,7 +70,7 @@ contract MachineSmartAccount is EIP712, AccessControl {
         uint256 nonce,
         bytes calldata signature
     ) external {
-        if (!hasRole(ENTRY_POINT_ROLE, msg.sender) && msg.sender != owner) {
+        if (!hasRole(MACHINE_STATION_ROLE, msg.sender) && msg.sender != owner) {
             revert Errors.NotAuthorized(msg.sender);
         }
 
@@ -86,6 +88,12 @@ contract MachineSmartAccount is EIP712, AccessControl {
         (bool success, ) = target.call(data);
 
         if (!success) {
+            emit Events.MachineTransactionExecuted(
+                msg.sender,
+                address(this),
+                target,
+                data
+            );
             revert Errors.TargetCallFailed(target);
         }
     }
@@ -100,7 +108,7 @@ contract MachineSmartAccount is EIP712, AccessControl {
         address recipientAddress,
         uint256 nonce,
         bytes calldata signature
-    ) external onlyRole(ENTRY_POINT_ROLE) {
+    ) external onlyRole(MACHINE_STATION_ROLE) {
         if (Constants.FUNDING_TOKEN == address(0)) revert Errors.ZeroAddress();
         if (recipientAddress == address(0)) revert Errors.ZeroAddress();
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce);
