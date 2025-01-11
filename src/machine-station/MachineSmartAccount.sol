@@ -14,23 +14,16 @@ contract MachineSmartAccount is EIP712, AccessControl {
 
     address public owner;
 
-    bytes32 public constant MACHINE_STATION_ROLE =
-        keccak256("MACHINE_STATION_ROLE");
+    bytes32 public constant MACHINE_STATION_ROLE = keccak256("MACHINE_STATION_ROLE");
 
     // EIP-712 type hashes
-    bytes32 private constant EXECUTE_TYPEHASH =
-        keccak256("Execute(address target,bytes data,uint256 nonce)");
+    bytes32 private constant EXECUTE_TYPEHASH = keccak256("Execute(address target,bytes data,uint256 nonce)");
     bytes32 private constant TRANSFER_BALANCE_TYPEHASH =
-        keccak256(
-            "TransferMachineBalance(address newMachineAddress,uint256 nonce)"
-        );
+        keccak256("TransferMachineBalance(address newMachineAddress,uint256 nonce)");
 
     mapping(uint256 => bool) public usedNonces;
 
-    constructor(
-        address _owner,
-        address machineStation
-    ) EIP712("MachineSmartAccount", "1") {
+    constructor(address _owner, address machineStation) EIP712("MachineSmartAccount", "1") {
         if (_owner == address(0)) revert Errors.ZeroAddress(); // Owner address cannot be zero
         if (machineStation == address(0)) revert Errors.ZeroAddress(); // Machine Station cannot be zero
         owner = _owner;
@@ -44,11 +37,7 @@ contract MachineSmartAccount is EIP712, AccessControl {
      * @param signature The signature to verify.
      * @param nonce Protects against replay attack.
      */
-    function validateUserOp(
-        bytes32 userOpHash,
-        bytes memory signature,
-        uint256 nonce
-    ) public view returns (bool) {
+    function validateUserOp(bytes32 userOpHash, bytes memory signature, uint256 nonce) public view returns (bool) {
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
 
         bytes32 digest = _hashTypedDataV4(userOpHash);
@@ -64,36 +53,24 @@ contract MachineSmartAccount is EIP712, AccessControl {
      * @param signature The signature verifying the eoa (machine owner) tx approval.
      * @param nonce Protects against replay attack.
      */
-    function execute(
-        address target,
-        bytes calldata data,
-        uint256 nonce,
-        bytes calldata signature
-    ) external {
+    function execute(address target, bytes calldata data, uint256 nonce, bytes calldata signature) external {
         if (!hasRole(MACHINE_STATION_ROLE, msg.sender) && msg.sender != owner) {
             revert Errors.NotAuthorized(msg.sender);
         }
 
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
 
-        bytes32 userOpHash = keccak256(
-            abi.encode(EXECUTE_TYPEHASH, target, keccak256(data), nonce)
-        );
+        bytes32 userOpHash = keccak256(abi.encode(EXECUTE_TYPEHASH, target, keccak256(data), nonce));
         if (!validateUserOp(userOpHash, signature, nonce)) {
             revert Errors.InvalidSignature(userOpHash, nonce); // Invalid EOA (machine owner) signature
         }
 
         usedNonces[nonce] = true;
 
-        (bool success, ) = target.call(data);
+        (bool success,) = target.call(data);
 
         if (!success) {
-            emit Events.MachineTransactionExecuted(
-                msg.sender,
-                address(this),
-                target,
-                data
-            );
+            emit Events.MachineTransactionExecuted(msg.sender, address(this), target, data);
             revert Errors.TargetCallFailed(target);
         }
     }
@@ -104,38 +81,25 @@ contract MachineSmartAccount is EIP712, AccessControl {
      * @param nonce Protects against replay attack.
      * @param signature The signature verifying the machine owner's tx approval.
      */
-    function transferMachineBalance(
-        address recipientAddress,
-        uint256 nonce,
-        bytes calldata signature
-    ) external onlyRole(MACHINE_STATION_ROLE) {
+    function transferMachineBalance(address recipientAddress, uint256 nonce, bytes calldata signature)
+        external
+        onlyRole(MACHINE_STATION_ROLE)
+    {
         if (Constants.FUNDING_TOKEN == address(0)) revert Errors.ZeroAddress();
         if (recipientAddress == address(0)) revert Errors.ZeroAddress();
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce);
 
-        bytes32 structHash = keccak256(
-            abi.encode(TRANSFER_BALANCE_TYPEHASH, recipientAddress, nonce)
-        );
+        bytes32 structHash = keccak256(abi.encode(TRANSFER_BALANCE_TYPEHASH, recipientAddress, nonce));
 
         if (!validateUserOp(structHash, signature, nonce)) {
             revert Errors.InvalidSignature(structHash, nonce);
         }
         usedNonces[nonce] = true;
 
-        uint256 machineBalance = IERC20(Constants.FUNDING_TOKEN).balanceOf(
-            address(this)
-        );
-        IERC20(Constants.FUNDING_TOKEN).safeTransfer(
-            recipientAddress,
-            machineBalance
-        );
+        uint256 machineBalance = IERC20(Constants.FUNDING_TOKEN).balanceOf(address(this));
+        IERC20(Constants.FUNDING_TOKEN).safeTransfer(recipientAddress, machineBalance);
 
-        emit Events.MachineBalanceTransferred(
-            address(this),
-            recipientAddress,
-            machineBalance,
-            nonce
-        );
+        emit Events.MachineBalanceTransferred(address(this), recipientAddress, machineBalance, nonce);
     }
 
     function getDomainSeparator() public view returns (bytes32) {
