@@ -2,13 +2,11 @@
 cache/
 out/
 bin
-examples/js/node_modules
+node_modules
 # Ignores development broadcast logs
 !/broadcast
 /broadcast/*/31337/
 /broadcast/**/dry-run/
-.DS_Store
-lib/.DS_Store
 
 # Docs
 docs/
