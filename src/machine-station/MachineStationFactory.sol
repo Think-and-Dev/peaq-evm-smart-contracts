@@ -33,14 +33,18 @@ contract MachineStationFactory is EIP712, AccessControl {
         "ExecutexecuteMachineTransferBalance(address machineOwner,address machineAddress,address recipientAddress,uint256 nonce"
     );
 
-    //bool public machineStationDepreceted;
     mapping(uint256 => bool) private usedNonces;
+    uint256 private storageDepositFee = 5000000000000000; // 0.005 tokens in 18 decimals;
+    mapping(address => bool) private storageDepositFeeAddresses;
 
     constructor(address admin, address paymaster) EIP712("MachineStationFactory", "1") {
         if (admin == address(0)) revert Errors.ZeroAddress();
         if (paymaster == address(0)) revert Errors.ZeroAddress();
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(STATION_MANAGER_ROLE, paymaster);
+        storageDepositFeeAddresses[Constants.PEAQ_DID] = true;
+        storageDepositFeeAddresses[Constants.PEAQ_RBAC] = true;
+        storageDepositFeeAddresses[Constants.PEAQ_STORAGE] = true;
     }
 
     /**
@@ -186,6 +190,62 @@ contract MachineStationFactory is EIP712, AccessControl {
      * @dev Execute a machine transaction via the machine station factory contract.
      * The Machine Smart Account will trigger the final target call
      * @param machineOwner The user (machine owner) on whose behalf the transaction is executed.
+     * @param targets The target contract address where the call data will be executed
+     * @param data The calldata for the transaction sent to the target contract address
+     * @param signature The signature verifying the owner's tx approval.
+     * @param machineOwnerSignature The signature verifying the machineOwner (machine owner) tx approval.
+     */
+    function executeMachineBatchTransactions(
+        address machineOwner,
+        address machineAddress,
+        address[] memory targets,
+        bytes[] memory data,
+        uint256 nonce,
+        bytes calldata signature,
+        bytes calldata machineOwnerSignature
+    ) external onlyRole(STATION_MANAGER_ROLE) {
+        if (machineAddress == address(0)) revert Errors.ZeroAddress(); // Machine address cannot be zero
+        if (machineOwner == address(0)) revert Errors.ZeroAddress(); // machine owner address cannot be zero
+        if (targets.length < 1) revert Errors.ZeroAddress(); // Target addresses cannot be zero
+        if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
+
+        // Verify the owner's signature
+        bytes32 structHash =
+            keccak256(abi.encode(EXECUTE_MACHINE_TRANSACTION_TYPEHASH, targets, keccak256(abi.encode(data)), nonce));
+
+        if (!_verifySignature(structHash, signature, nonce)) {
+            revert Errors.InvalidSignature(structHash, nonce); // Invalid Machine Station Owner signature
+        }
+
+        usedNonces[nonce] = true;
+
+        uint256 countStorageFeesTargets = checkStorageDepositFeeAddresses(targets);
+
+        // Transfer tokens with balance validation
+        // This transfer is only done if the target address is peaq did, rbac or storage contract call
+        if (Constants.FUNDING_TOKEN != address(0) && countStorageFeesTargets > 0) {
+            
+            uint256 totalStorageFees = countStorageFeesTargets * storageDepositFee;
+            // Fetch machine's balance
+            uint256 machineBalance = IERC20(Constants.FUNDING_TOKEN).balanceOf(machineAddress);
+
+            // Check if the machine balance is less than total Storage Fees before funding it
+            // This is added because each machine account is required to pay a storage deposit fees by the peaq storage, rbac and did contracts.
+            // while using the on-chain storage
+            if (machineBalance < totalStorageFees) {
+                // Fund the machine address balance
+                IERC20(Constants.FUNDING_TOKEN).safeTransfer(machineAddress, totalStorageFees);
+            }
+        }
+
+        // Forward the call to the machine account to execute the target tx
+        MachineSmartAccount(machineAddress).executeBatch(targets, data, nonce, machineOwnerSignature);
+    }
+
+    /**
+     * @dev Execute a machine transaction via the machine station factory contract.
+     * The Machine Smart Account will trigger the final target call
+     * @param machineOwner The user (machine owner) on whose behalf the transaction is executed.
      * @param machineAddress The machine smart account address
      * @param recipientAddress The recipient of the tokens
      * @param nonce Protects against replay attack.
@@ -235,6 +295,20 @@ contract MachineStationFactory is EIP712, AccessControl {
         address signer = ECDSA.recover(digest, signature);
 
         return hasRole(DEFAULT_ADMIN_ROLE, signer);
+    }
+
+    /**
+     * @dev Checks if target addresses that require storage deposit fees are in the supplied addresses input.
+     * Increment the counter if address exists
+     * @param addresses The addresses to check
+     */
+    function checkStorageDepositFeeAddresses(address[] memory addresses) public view returns (uint256 count) {
+        for (uint256 i = 0; i < addresses.length; i++) {
+            if (storageDepositFeeAddresses[addresses[i]]) {
+                count++;
+            }
+        }
+        return count;
     }
 
     // Note: "Unable to determine contract standard" error is throw during native token transfer

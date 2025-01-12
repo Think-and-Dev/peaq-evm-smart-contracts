@@ -5,6 +5,7 @@ library Events {
     event MachineTransactionExecuted(
         address indexed sender, address indexed machineAddress, address target, bytes functionCalldata
     );
+    event MachineBatchTransactionExecuted(address indexed sender, address indexed machineAddress, address[] targets);
     event MachineBalanceTransferred(
         address indexed machineAddress, address indexed recipientAddress, uint256 amount, uint256 nonce
     );
