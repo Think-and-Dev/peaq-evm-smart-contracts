@@ -9,4 +9,5 @@ library Errors {
     error NotAuthorized(address caller);
     error TargetCallFailed(address target);
     error TargetBatchCallFailed(address[] targets);
+    error MaxBatchTransactionExceeded(address[] targets);
 }

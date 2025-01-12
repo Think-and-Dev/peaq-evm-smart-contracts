@@ -14,6 +14,7 @@ contract MachineStationFactory is EIP712, AccessControl {
     using SafeERC20 for IERC20;
 
     bytes32 public constant STATION_MANAGER_ROLE = keccak256("STATION_MANAGER_ROLE");
+    bytes32 public constant REQUIRED_STORAGE_DEPOSIT_FEE_ROLE = keccak256("REQUIRED_STORAGE_DEPOSIT_FEE_ROLE");
 
     // EIP-712 type hashes
     bytes32 private constant DEPLOY_MACHINE_TYPEHASH =
@@ -29,22 +30,30 @@ contract MachineStationFactory is EIP712, AccessControl {
         "ExecuteMachineTransaction(address machineOwner,address machineAddress,address target,bytes data,uint256 nonce)"
     );
 
+    bytes32 private constant EXECUTE_MACHINE_BATCH_TRANSACTIONS_TYPEHASH = keccak256(
+        "ExecuteMachineBatchTransactions(address machineOwner,address machineAddress,address[] targets,bytes[] data,uint256 nonce)"
+    );
+
     bytes32 private constant EXECUTE_MACHINE_TRANSFER_TYPEHASH = keccak256(
         "ExecutexecuteMachineTransferBalance(address machineOwner,address machineAddress,address recipientAddress,uint256 nonce"
     );
 
     mapping(uint256 => bool) private usedNonces;
     uint256 private storageDepositFee = 5000000000000000; // 0.005 tokens in 18 decimals;
-    mapping(address => bool) private storageDepositFeeAddresses;
 
-    constructor(address admin, address paymaster) EIP712("MachineStationFactory", "1") {
+    constructor(address admin, address stationManager) EIP712("MachineStationFactory", "1") {
         if (admin == address(0)) revert Errors.ZeroAddress();
-        if (paymaster == address(0)) revert Errors.ZeroAddress();
+        if (stationManager == address(0)) revert Errors.ZeroAddress();
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(STATION_MANAGER_ROLE, paymaster);
-        storageDepositFeeAddresses[Constants.PEAQ_DID] = true;
-        storageDepositFeeAddresses[Constants.PEAQ_RBAC] = true;
-        storageDepositFeeAddresses[Constants.PEAQ_STORAGE] = true;
+        _grantRole(STATION_MANAGER_ROLE, stationManager);
+        _grantRole(REQUIRED_STORAGE_DEPOSIT_FEE_ROLE, Constants.PEAQ_DID);
+        _grantRole(REQUIRED_STORAGE_DEPOSIT_FEE_ROLE, Constants.PEAQ_RBAC);
+        _grantRole(REQUIRED_STORAGE_DEPOSIT_FEE_ROLE, Constants.PEAQ_STORAGE);
+    }
+
+    function changeOwner(uint256 newStorageDepositFee) external onlyRole(STATION_MANAGER_ROLE) {
+        storageDepositFee = newStorageDepositFee;
+        emit Events.StorageDepositFeeChanged(newStorageDepositFee);
     }
 
     /**
@@ -166,16 +175,13 @@ contract MachineStationFactory is EIP712, AccessControl {
 
         // Transfer tokens with balance validation
         // This transfer is only done if the target address is peaq did, rbac or storage contract call
-        if (
-            Constants.FUNDING_TOKEN != address(0)
-                && (target == Constants.PEAQ_DID || target == Constants.PEAQ_RBAC || target == Constants.PEAQ_STORAGE)
-        ) {
+        if (Constants.FUNDING_TOKEN != address(0) && hasRole(REQUIRED_STORAGE_DEPOSIT_FEE_ROLE, target)) {
             // Fetch machine's balance
             uint256 machineBalance = IERC20(Constants.FUNDING_TOKEN).balanceOf(machineAddress);
 
             // Check if the machine balance is less than min balance before funding it
-            // This is added because each machine account is required to pay a storage deposit fees by the peaq storage and did contracts.
-            // the storage
+            // This is added because each machine account is required to pay a storage deposit fees by the peaq storage, rbac and did contracts
+            // while using the on-chain storage
             if (machineBalance <= Constants.MIN_BALANCE) {
                 // Fund the machine adress balance
                 IERC20(Constants.FUNDING_TOKEN).safeTransfer(machineAddress, Constants.FUNDING_AMOUNT);
@@ -210,8 +216,9 @@ contract MachineStationFactory is EIP712, AccessControl {
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
 
         // Verify the owner's signature
-        bytes32 structHash =
-            keccak256(abi.encode(EXECUTE_MACHINE_TRANSACTION_TYPEHASH, targets, keccak256(abi.encode(data)), nonce));
+        bytes32 structHash = keccak256(
+            abi.encode(EXECUTE_MACHINE_BATCH_TRANSACTIONS_TYPEHASH, targets, keccak256(abi.encode(data)), nonce)
+        );
 
         if (!_verifySignature(structHash, signature, nonce)) {
             revert Errors.InvalidSignature(structHash, nonce); // Invalid Machine Station Owner signature
@@ -224,7 +231,6 @@ contract MachineStationFactory is EIP712, AccessControl {
         // Transfer tokens with balance validation
         // This transfer is only done if the target address is peaq did, rbac or storage contract call
         if (Constants.FUNDING_TOKEN != address(0) && countStorageFeesTargets > 0) {
-            
             uint256 totalStorageFees = countStorageFeesTargets * storageDepositFee;
             // Fetch machine's balance
             uint256 machineBalance = IERC20(Constants.FUNDING_TOKEN).balanceOf(machineAddress);
@@ -298,13 +304,13 @@ contract MachineStationFactory is EIP712, AccessControl {
     }
 
     /**
-     * @dev Checks if target addresses that require storage deposit fees are in the supplied addresses input.
-     * Increment the counter if address exists
+     * @dev Checks if target addresses required storage deposit fees.
+     * Increment the counter if address has role
      * @param addresses The addresses to check
      */
     function checkStorageDepositFeeAddresses(address[] memory addresses) public view returns (uint256 count) {
         for (uint256 i = 0; i < addresses.length; i++) {
-            if (storageDepositFeeAddresses[addresses[i]]) {
+            if (hasRole(REQUIRED_STORAGE_DEPOSIT_FEE_ROLE, addresses[i])) {
                 count++;
             }
         }

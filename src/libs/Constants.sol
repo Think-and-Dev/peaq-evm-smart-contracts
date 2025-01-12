@@ -11,5 +11,5 @@ library Constants {
 
     // agung specific constants
     uint256 constant AGUNG_MIN_BALANCE = 330000000000000000; // 0.33 tokens in 18 decimals
-    uint256 constant AGUNG_FUNDING_AMOUNT = 50000000000000000; // 0.05 tokens in 18 decimals
+    uint256 constant AGUNG_FUNDING_AMOUNT = 1000000000000000000; // 1.0 tokens in 18 decimals
 }
