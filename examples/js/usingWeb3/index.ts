@@ -2,8 +2,8 @@ import Web3 from 'web3';
 import { AbiItem } from 'web3-utils';
 import { TransactionReceipt } from 'web3-types';
 import { Sdk } from '@peaq-network/sdk';
-import { decodeAddress } from '@polkadot/util-crypto';
-import { u8aToHex } from '@polkadot/util';
+import { mnemonicGenerate, cryptoWaitReady } from '@polkadot/util-crypto';
+import { Keyring } from '@polkadot/keyring';
 
 // Import the contract ABI
 import {abi} from '../MachineStationFactoryABI.json';
@@ -95,7 +95,7 @@ class MachineStationFactoryExample {
 
     async submitMachineStorageTx() {
       try {
-          const eoa = machineOwnerAccount.address; 
+          const machineOwner = machineOwnerAccount.address; 
           const nonce = this.getRandomNonce();
           const target = '0x0000000000000000000000000000000000000801';
     
@@ -119,12 +119,107 @@ class MachineStationFactoryExample {
           const data = params.replace("0x", addItemFunctionSelector);
           
     
-          const eoaSignature = await this.machineOwnerSignTypedDataExecuteMachine(target, data, nonce)
+          const machineOwnerSignature = await this.machineOwnerSignTypedDataExecuteMachine(target, data, nonce)
           const ownerSignature = await this.ownerSignTypedDataExecuteMachineTransaction(machineAddress, target, data, nonce)
     
-          await this.executeMachineTransaction(machineAddress, target, data, nonce, ownerSignature, eoaSignature);
+          await this.executeMachineTransaction(machineAddress, target, data, nonce, ownerSignature, machineOwnerSignature);
       } catch (error) {
           console.error('Error:', error);
+      }
+    }
+
+    async submitMachineStorageBatchTx() {
+      try {
+          const nonce = this.getRandomNonce();
+
+          const abiCoder = new AbiCoder()
+
+          let now = new Date().getTime();
+
+          const targets = ['0x0000000000000000000000000000000000000801','0x0000000000000000000000000000000000000801'];
+          const calldata: string[] = [];
+
+          const addItemFunctionSignature = "addItem(bytes,bytes)";
+          const addItemFunctionSelector = ethers.keccak256(ethers.toUtf8Bytes(addItemFunctionSignature)).substring(0, 10);
+          
+          for (let index = 0; index < targets.length; index++) {
+    
+            const itemType = `pqdemo_item_type-${index}-${now}`
+            const itemTypeHex = ethers.hexlify(ethers.toUtf8Bytes(itemType));
+            const item = "peaq demo item storage"
+            const itemHex = ethers.hexlify(ethers.toUtf8Bytes(item));
+      
+            const params = abiCoder.encode(
+                ["bytes", "bytes"],
+                [itemTypeHex, itemHex]
+            );
+      
+            let data = params.replace("0x", addItemFunctionSelector);
+            calldata.push(data);
+            
+          }
+          
+          const machineOwnerSignature = await this.machineOwnerSignTypedDataExecuteMachineBatch(targets, calldata, nonce)
+          const ownerSignature = await this.ownerSignTypedDataExecuteMachineBatchTransactions(machineAddress, targets, calldata, nonce)
+    
+          console.log("submitMachineStorageBatchTx targets: ", targets);
+          console.log("submitMachineStorageBatchTx calldata: ", calldata);
+          await this.executeMachineBatchTransactions(machineAddress, targets, calldata, nonce, ownerSignature, machineOwnerSignature);
+      } catch (error) {
+          console.error('Error:', error);
+      }
+    }
+
+    async submitDIDTx() {
+      try {
+        const machineOwner = machineOwnerAccount.address; // ownerPrivateKey.address;
+    
+        const nonce = this.getRandomNonce(); // Example nonce
+        const target = "0x0000000000000000000000000000000000000800"; // target contract address - DID contract address
+    
+        const abiCoder = new AbiCoder();
+    
+        const addAttributeFunctionSignature =
+          "addAttribute(address,bytes,bytes,uint32)";
+        const createDidFunctionSelector = ethers
+          .keccak256(ethers.toUtf8Bytes(addAttributeFunctionSignature))
+          .substring(0, 10);
+    
+        let now = new Date().getTime();
+    
+        // generate a random account using polkadot util/sdk
+        const { address } = await this.generateNewAddress();;
+        const didName = `did:peaq:${address}#test`;
+        const name = ethers.hexlify(ethers.toUtf8Bytes(didName));
+    
+        const value = await this.generateDIDHash(address);
+    
+        // converted the original did value to bytes and then hex to retain the original value during decoding
+        const didVal = ethers.hexlify(ethers.toUtf8Bytes(value));
+    
+        const validityFor = 0;
+    
+        const params = abiCoder.encode(
+          ["address", "bytes", "bytes", "uint32"],
+          [machineAddress, name, didVal, validityFor]
+        );
+    
+        const calldata = params.replace("0x", createDidFunctionSelector);
+    
+        const machineOwnerSignature = await this.machineOwnerSignTypedDataExecuteMachine(target, calldata, nonce);
+        const ownerSignature = await this.ownerSignTypedDataExecuteMachineTransaction(machineAddress, target, calldata, nonce);
+    
+    
+        await this.executeMachineTransaction(
+          machineAddress,
+          target,
+          calldata,
+          nonce,
+          ownerSignature,
+          machineOwnerSignature
+        );
+      } catch (error) {
+        console.error("Error:", error);
       }
     }
 
@@ -312,19 +407,74 @@ class MachineStationFactoryExample {
       data: string,
       nonce: BigInt,
       signature: string,
-      eoaSignature: string
+      machineOwnerSignature: string
   ): Promise<void> {
     try {
 
       const methodData = contract.interface.encodeFunctionData(
         "executeMachineTransaction",
-        [machineAddress, target, data, nonce, signature, eoaSignature]
+        [machineAddress, target, data, nonce, signature, machineOwnerSignature]
       );
 
       // Send the transaction and get the receipt
       const txResponse = await this.sendTransaction(methodData);
       let receipt = await txResponse.wait().finally();
 
+      console.log('Machine Tx executed:', receipt?.hash);
+
+    } catch (error: any) {
+      console.error("Transaction failed. Error:", error);
+
+      // Check if the error is a revert error with data
+      if (error.data) {
+        try {
+          // Decode the revert error using the contract's ABI
+          const iface = new ethers.Interface(contract.interface.fragments);
+          const decodedError = iface.parseError(error.data);
+
+          console.log("Decoded Error:", decodedError);
+
+          // Extract error name and arguments
+          // const { name, args } = decodedError;
+          // console.log("Error Name:", name);
+          // console.log("Arguments:", args);
+
+          // if (name === "InvalidSignature") {
+          //   console.error("InvalidSignature Error Details:");
+          //   console.error("structHash:", args.structHash);
+          //   console.error("nonce:", args.nonce.toString());
+          // }
+        } catch (decodeError) {
+          console.error("Failed to decode error data:", decodeError);
+        }
+      } else {
+        console.error("Transaction failed without revert data:", error);
+      }
+    }     
+  }
+
+  async executeMachineBatchTransactions(
+    machineAddress: string,
+    targets: string[],
+    data: string[],
+    nonce: BigInt,
+    signature: string,
+    machineOwnerSignature: string
+  ): Promise<void> {
+    try {
+
+      const methodData = contract.interface.encodeFunctionData(
+        "executeMachineBatchTransactions",
+        [machineAddress, targets, data, nonce, signature, machineOwnerSignature]
+      );
+
+      // Send the transaction and get the receipt
+      const txResponse = await this.sendTransaction(methodData);
+
+      let receipt = await txResponse.wait().finally();
+      const logs = receipt?.logs;
+
+      console.log("logs: ", logs);
       console.log('Machine Tx executed:', receipt?.hash);
 
     } catch (error: any) {
@@ -549,6 +699,71 @@ class MachineStationFactoryExample {
       return signature;
     }
 
+    async machineOwnerSignTypedDataExecuteMachineBatch(
+      targets: string[],
+      data: string[],
+      nonce: BigInt,
+    ): Promise<string> {
+      const domain = {
+        name: "MachineSmartAccount", 
+        version: "1", 
+        chainId: chainID,
+        verifyingContract: machineAddress,
+      };
+    
+      const types = {
+        ExecuteBatch: [
+          { name: "targets", type: "address[]" },
+          { name: "data", type: "bytes[]" },
+          { name: "nonce", type: "uint256" },
+        ],
+      };
+    
+      const message = {
+        targets: targets,
+        data: data,
+        nonce: nonce,
+      };
+    
+      const signature = await machineOwnerAccount.signTypedData(domain, types, message);
+      return signature;
+    }
+
+    async ownerSignTypedDataExecuteMachineBatchTransactions(
+      machineAddress: string,
+      targets: string[],
+      data: string[],
+      nonce: BigInt,
+    ): Promise<string> {
+      const domain = {
+        name: "MachineStationFactory", 
+        version: "1", 
+        chainId: chainID,
+        verifyingContract: MachineStationFactoryContractAddress,
+      };
+    
+      const types = {
+        ExecuteMachineBatchTransactions: [
+          { name: "machineAddress", type: "address" },
+          { name: "targets", type: "address[]" },
+          { name: "data", type: "bytes[]" },
+          { name: "nonce", type: "uint256" },
+        ],
+      };
+  
+      const message = {
+        machineAddress: machineAddress,
+        targets: targets,
+        data: data,
+        nonce: nonce,
+      };
+    
+    
+      const signature = await ownerAccount.signTypedData(domain, types, message);
+    
+      return signature;
+    }
+
     // Helper function to sign and send transactions
     async sendTransaction(
         methodData: string
@@ -568,6 +783,57 @@ class MachineStationFactoryExample {
         const randomPart = BigInt(Math.floor(Math.random() * 1e18));
         return now * randomPart;
     }
+
+    async generateDIDHash(randomAddress: string): Promise<string> {
+      const customFields = {
+        prefix: "peaq",
+        controller: randomAddress,
+        verifications: [
+          {
+            type: "Ed25519VerificationKey2020",
+          },
+        ],
+        signature: {
+          type: "Ed25519VerificationKey2020",
+          issuer: "5Df42mkztLtkksgQuLy4YV6hmhzdjYvDknoxHv1QBkaY12Pg",
+          hash: "0x12345", // replace with your issuer signature
+        },
+        services: [
+          {
+            id: "#emailSignature",
+            type: "emailSignature",
+            data: "0e816a00d228a6d215542334e51a01eb3280d202fe2324abe75bb8b4acaec4207cc00106e830d493603305f797706a0ef1952c44ea9f9b44c0b3ccc3d4bc758b", // replace with your email signature
+          },
+        ],
+      };
+    
+      const did_hash = await Sdk.generateDidDocument({
+        address: randomAddress,
+        customDocumentFields: customFields,
+      });
+      return did_hash.value as string;
+    };
+
+    async generateNewAddress() {
+      await cryptoWaitReady();
+      // Generate a new mnemonic
+      const mnemonic = mnemonicGenerate();
+    
+      console.log('Generated Mnemonic:', mnemonic);
+    
+      // Create a keyring instance
+      const keyring = new Keyring({ type: 'sr25519' });
+    
+      // Add a new account to the keyring
+      const pair = keyring.addFromMnemonic(mnemonic);
+    
+      console.log('Generated Address:', pair.address);
+    
+      return {
+          mnemonic,
+          address: pair.address,
+      };
+    }
 }
 
 const machineStationExample = new MachineStationFactoryExample();
@@ -581,6 +847,10 @@ const machineStationExample = new MachineStationFactoryExample();
     await machineStationExample.submitGetRealStorageTx();
     // submit machine storage tx
     await machineStationExample.submitMachineStorageTx();
+    // submit machine storage batch txs
+    await machineStationExample.submitMachineStorageBatchTx();
+    // submit machine did tx
+    await machineStationExample.submitDIDTx();
     // Transfer the balance of a machine to a recipient
     await machineStationExample.submitMachineTransferBalanceTx();
     
