@@ -48,6 +48,20 @@ class MachineStationFactoryExample {
         machineAddress = await this.deployMachineSmartAccount(machineOwner, nonce, deploySignature);
     }
 
+    async submitMachineTransferBalanceTx() {
+        const recipientAddress = machineOwnerAccount.address;
+        const nonce = this.getRandomNonce();
+      
+        const machineOwnerSignature = await this.machineOwnerSignTypedDataTransferMachineBalance(recipientAddress, nonce)
+        const ownerSignature = await this.ownerSignTypedDataTransferMachineBalance(machineAddress, recipientAddress, nonce)
+      
+        console.log("nonce:", nonce);
+        console.log("machineOwnerSignature:", machineOwnerSignature);
+        console.log("ownerSignature:", ownerSignature);
+        await this.executeMachineTransferBalance(machineAddress, recipientAddress, nonce, ownerSignature, machineOwnerSignature);
+      
+    }
+
     async deployMachineSmartAccount(
         machineOwner: string,
         nonce: BigInt,
@@ -118,9 +132,61 @@ class MachineStationFactoryExample {
           console.error("Transaction failed without revert data:", error);
         }
       }
-
       return "";
+    }
 
+    async executeMachineTransferBalance(
+        machineAddress: string,
+        recipientAddress: string,
+        nonce: BigInt,
+        signature: string,
+        machineOwnerSignature: string,
+    ): Promise<void> {
+      try {
+        // Encode the method call data
+        const methodData = contract.interface.encodeFunctionData(
+          "executeMachineTransferBalance",
+          [machineAddress, recipientAddress, nonce, signature, machineOwnerSignature]
+        );
+  
+        // Send the transaction and get the receipt
+        const txResponse = await this.sendTransaction(methodData);
+  
+        console.log("txResponse: ", txResponse);
+  
+        let receipt = await txResponse.wait().finally();
+  
+          console.log('Machine Balance Transfer Tx executed:', receipt?.hash);
+  
+      } catch (error: any) {
+        console.error("Transaction failed. Error:", error);
+  
+        // Check if the error is a revert error with data
+        if (error.data) {
+          try {
+            // Decode the revert error using the contract's ABI
+            const iface = new ethers.Interface(contract.interface.fragments);
+            const decodedError = iface.parseError(error.data);
+  
+            console.log("Decoded Error:", decodedError);
+  
+            // Extract error name and arguments
+            // const { name, args } = decodedError;
+            // console.log("Error Name:", name);
+            // console.log("Arguments:", args);
+  
+            // if (name === "InvalidSignature") {
+            //   console.error("InvalidSignature Error Details:");
+            //   console.error("structHash:", args.structHash);
+            //   console.error("nonce:", args.nonce.toString());
+            // }
+          } catch (decodeError) {
+            console.error("Failed to decode error data:", decodeError);
+          }
+        } else {
+          console.error("Transaction failed without revert data:", error);
+        }
+      }
     }
 
     async ownerSignTypedDataDeployMachineSmartAccount(
@@ -157,7 +223,66 @@ class MachineStationFactoryExample {
         const signature = await ownerAccount.signTypedData(domain, types, message);
       
         return signature;
-      }
+    }
+
+    async ownerSignTypedDataTransferMachineBalance(
+        machineAddress: string,
+        recipientAddress: string,
+        nonce: BigInt,
+      ): Promise<string> {
+        // Step 1: Define the EIP-712 Domain
+        const domain = {
+          name: "MachineStationFactory", 
+          version: "1", 
+          chainId: chainID,
+          verifyingContract: MachineStationFactoryContractAddress,
+        };
+      
+        const types = {
+          ExecuteMachineTransferBalance: [
+            { name: "machineAddress", type: "address" },
+            { name: "recipientAddress", type: "address" },
+            { name: "nonce", type: "uint256" },
+          ],
+        };
+    
+        const message = {
+          machineAddress: machineAddress,
+          recipientAddress: recipientAddress,
+          nonce: nonce,
+        };
+
+        const signature = await ownerAccount.signTypedData(domain, types, message);
+        return signature;
+    }
+    
+    async machineOwnerSignTypedDataTransferMachineBalance(
+        recipientAddress: string,
+        nonce: BigInt,
+      ): Promise<string> {
+        // Step 1: Define the EIP-712 Domain
+        const domain = {
+          name: "MachineSmartAccount", 
+          version: "1", 
+          chainId: chainID,
+          verifyingContract: machineAddress,
+        };
+      
+        const types = {
+          TransferMachineBalance: [
+            { name: "recipientAddress", type: "address" },
+            { name: "nonce", type: "uint256" },
+          ],
+        };
+      
+        const message = {
+          recipientAddress: recipientAddress,
+          nonce: nonce,
+        };
+    
+        const signature = await machineOwnerAccount.signTypedData(domain, types, message);
+        return signature;
+    }
 
     // Helper function to sign and send transactions
     async sendTransaction(
@@ -182,13 +307,14 @@ class MachineStationFactoryExample {
     
 }
 
+const machineStationExample = new MachineStationFactoryExample();
 
 // Example usage
 (async () => {
 
-    const machineStationExample = new MachineStationFactoryExample();
-
     // deploy machine smart account
     await machineStationExample.submitDeployMachineSmartAccountTx();
+    // Transfer the balance of a machine to a recipient
+    await machineStationExample.submitMachineTransferBalanceTx();
     
 })();
