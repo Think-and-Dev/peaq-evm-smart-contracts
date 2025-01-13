@@ -1,6 +1,4 @@
-import Web3 from 'web3';
 import { AbiItem } from 'web3-utils';
-import { TransactionReceipt } from 'web3-types';
 import { Sdk } from '@peaq-network/sdk';
 import { mnemonicGenerate, cryptoWaitReady } from '@polkadot/util-crypto';
 import { Keyring } from '@polkadot/keyring';
@@ -23,12 +21,12 @@ const rpcURL = "https://erpc-async.agung.peaq.network";
 const chainID = 9990;
 
 // Contract details
-const MachineStationFactoryContractAddress: string = '0x31B80DbA6806E0335Bfac6D12A5A820C32D73d68'; // Replace with the deployed Gas station factory contract address
+const MachineStationFactoryContractAddress: string = '0x31B80DbA6806E0335Bfac6D12A5A820C32D73d68'; // Replace with the your dedicated machine station factory contract address
 const contract = new ethers.ContractFactory(abi as AbiItem[], MachineStationFactoryContractAddress);
 
 // Wallet details
-const ownerPrivateKey: string | undefined = process.env.CONTRACT_OWNER_PRIVATE_KEY??""; // Replace with your wallet's private key
-const machineOwnerPrivateKey: string | undefined = process.env.MACHINE_OWNER_PRIVATE_KEY??""; // Replace with your wallet's private key
+const ownerPrivateKey: string | undefined = process.env.CONTRACT_OWNER_PRIVATE_KEY??""; // Replace with owner wallet's private key
+const machineOwnerPrivateKey: string | undefined = process.env.MACHINE_OWNER_PRIVATE_KEY??""; // Replace with machine owner wallet's private key
 
 const provider = new ethers.JsonRpcProvider(rpcURL);
 
@@ -45,6 +43,7 @@ class MachineStationFactoryExample {
       
         const deploySignature = await this.ownerSignTypedDataDeployMachineSmartAccount(machineOwner, nonce)
       
+        // call the deploy smart account tx and update the global machine address var
         machineAddress = await this.deployMachineSmartAccount(machineOwner, nonce, deploySignature);
     }
 
@@ -56,8 +55,6 @@ class MachineStationFactoryExample {
         const ownerSignature = await this.ownerSignTypedDataTransferMachineBalance(machineAddress, recipientAddress, nonce)
       
         console.log("nonce:", nonce);
-        console.log("machineOwnerSignature:", machineOwnerSignature);
-        console.log("ownerSignature:", ownerSignature);
         await this.executeMachineTransferBalance(machineAddress, recipientAddress, nonce, ownerSignature, machineOwnerSignature);
       
     }
@@ -143,7 +140,6 @@ class MachineStationFactoryExample {
           const addItemFunctionSelector = ethers.keccak256(ethers.toUtf8Bytes(addItemFunctionSignature)).substring(0, 10);
           
           for (let index = 0; index < targets.length; index++) {
-    
             const itemType = `pqdemo_item_type-${index}-${now}`
             const itemTypeHex = ethers.hexlify(ethers.toUtf8Bytes(itemType));
             const item = "peaq demo item storage"
@@ -156,14 +152,11 @@ class MachineStationFactoryExample {
       
             let data = params.replace("0x", addItemFunctionSelector);
             calldata.push(data);
-            
           }
           
           const machineOwnerSignature = await this.machineOwnerSignTypedDataExecuteMachineBatch(targets, calldata, nonce)
           const ownerSignature = await this.ownerSignTypedDataExecuteMachineBatchTransactions(machineAddress, targets, calldata, nonce)
     
-          console.log("submitMachineStorageBatchTx targets: ", targets);
-          console.log("submitMachineStorageBatchTx calldata: ", calldata);
           await this.executeMachineBatchTransactions(machineAddress, targets, calldata, nonce, ownerSignature, machineOwnerSignature);
       } catch (error) {
           console.error('Error:', error);
@@ -172,8 +165,6 @@ class MachineStationFactoryExample {
 
     async submitDIDTx() {
       try {
-        const machineOwner = machineOwnerAccount.address; // ownerPrivateKey.address;
-    
         const nonce = this.getRandomNonce(); // Example nonce
         const target = "0x0000000000000000000000000000000000000800"; // target contract address - DID contract address
     
@@ -208,7 +199,6 @@ class MachineStationFactoryExample {
     
         const machineOwnerSignature = await this.machineOwnerSignTypedDataExecuteMachine(target, calldata, nonce);
         const ownerSignature = await this.ownerSignTypedDataExecuteMachineTransaction(machineAddress, target, calldata, nonce);
-    
     
         await this.executeMachineTransaction(
           machineAddress,
