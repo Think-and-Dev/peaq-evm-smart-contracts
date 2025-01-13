@@ -2,9 +2,8 @@
 pragma solidity 0.8.25;
 
 library Events {
-    event MachineTransactionExecuted(
-        address indexed sender, address indexed machineAddress, address target, bytes functionCalldata
-    );
+    event MachineTransactionExecuted(address indexed sender, address indexed machineAddress, address target);
+    event MachineBatchTransactionExecuted(address indexed machineAddress, uint256 index, bool result);
     event MachineBalanceTransferred(
         address indexed machineAddress, address indexed recipientAddress, uint256 amount, uint256 nonce
     );
@@ -13,6 +12,7 @@ library Events {
         address indexed oldMachineStation, address indexed newMachineStation, uint256 amount, uint256 nonce
     );
     event TransactionExecuted(address indexed target, bytes data, uint256 nonce, address indexed executor);
+    event StorageDepositFeeChanged(uint256 newStorageDepositFee);
     event OnReceivedCall();
     event OnFailbackCall();
 }

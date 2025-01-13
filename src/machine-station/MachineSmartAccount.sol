@@ -13,13 +13,18 @@ contract MachineSmartAccount is EIP712, AccessControl {
     using SafeERC20 for IERC20;
 
     address public owner;
+    // Batch call value
+    uint256[] batch_call_value;
+    uint64[] gas_limit_value;
 
     bytes32 public constant MACHINE_STATION_ROLE = keccak256("MACHINE_STATION_ROLE");
 
     // EIP-712 type hashes
     bytes32 private constant EXECUTE_TYPEHASH = keccak256("Execute(address target,bytes data,uint256 nonce)");
+    bytes32 private constant EXECUTE_BATCH_TYPEHASH =
+        keccak256("ExecuteBatch(address[] targets,bytes[] data,uint256 nonce)");
     bytes32 private constant TRANSFER_BALANCE_TYPEHASH =
-        keccak256("TransferMachineBalance(address newMachineAddress,uint256 nonce)");
+        keccak256("TransferMachineBalance(address recipientAddress,uint256 nonce)");
 
     mapping(uint256 => bool) public usedNonces;
 
@@ -32,7 +37,7 @@ contract MachineSmartAccount is EIP712, AccessControl {
     }
 
     /**
-     * @dev Verify the eoa (machine owner) signature.
+     * @dev Verify the machine owner signature.
      * @param userOpHash The hash of the signed message.
      * @param signature The signature to verify.
      * @param nonce Protects against replay attack.
@@ -50,7 +55,7 @@ contract MachineSmartAccount is EIP712, AccessControl {
      * @dev Execute the target tx
      * @param target The target contract address where the call data will be executed
      * @param data The calldata for the transaction sent to the target contract address
-     * @param signature The signature verifying the eoa (machine owner) tx approval.
+     * @param signature The signature verifying the machine owner tx approval.
      * @param nonce Protects against replay attack.
      */
     function execute(address target, bytes calldata data, uint256 nonce, bytes calldata signature) external {
@@ -62,7 +67,7 @@ contract MachineSmartAccount is EIP712, AccessControl {
 
         bytes32 userOpHash = keccak256(abi.encode(EXECUTE_TYPEHASH, target, keccak256(data), nonce));
         if (!validateUserOp(userOpHash, signature, nonce)) {
-            revert Errors.InvalidSignature(userOpHash, nonce); // Invalid EOA (machine owner) signature
+            revert Errors.InvalidMachineOwnerSignature(userOpHash, nonce); // Invalid machine owner signature
         }
 
         usedNonces[nonce] = true;
@@ -70,9 +75,54 @@ contract MachineSmartAccount is EIP712, AccessControl {
         (bool success,) = target.call(data);
 
         if (!success) {
-            emit Events.MachineTransactionExecuted(msg.sender, address(this), target, data);
             revert Errors.TargetCallFailed(target);
         }
+        emit Events.MachineTransactionExecuted(msg.sender, address(this), target);
+    }
+
+    /**
+     * @dev Execute batch transactions using the target addresses and their respective call data
+     * @param targets The target contract addresses where the call data will be executed
+     * @param data The array of calldata for the transaction sent to the target contract addresses
+     * @param signature The signature verifying the machine owner tx approval.
+     * @param nonce Protects against replay attack.
+     */
+    function executeBatch(address[] memory targets, bytes[] calldata data, uint256 nonce, bytes calldata signature)
+        external
+    {
+        if (!hasRole(MACHINE_STATION_ROLE, msg.sender) && msg.sender != owner) {
+            revert Errors.NotAuthorized(msg.sender);
+        }
+
+        if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
+
+        bytes32 dataHash = _hashData(data);
+
+        bytes32 userOpHash =
+            keccak256(abi.encode(EXECUTE_BATCH_TYPEHASH, keccak256(abi.encodePacked(targets)), dataHash, nonce));
+        if (!validateUserOp(userOpHash, signature, nonce)) {
+            revert Errors.InvalidMachineOwnerSignature(userOpHash, nonce); // Invalid machine owner signature
+        }
+
+        usedNonces[nonce] = true;
+
+        for (uint256 i = 0; i < targets.length; i++) {
+            (bool success,) = targets[i].call(data[i]);
+
+            emit Events.MachineBatchTransactionExecuted(address(this), i, success);
+        }
+    }
+
+    /**
+     * @dev Hash the bytes[] data
+     * @param data The calldata to hash
+     */
+    function _hashData(bytes[] calldata data) private pure returns (bytes32) {
+        bytes32[] memory encoded = new bytes32[](data.length);
+        for (uint256 i = 0; i < data.length; i++) {
+            encoded[i] = keccak256(data[i]);
+        }
+        return keccak256(abi.encodePacked(encoded));
     }
 
     /**
@@ -92,7 +142,7 @@ contract MachineSmartAccount is EIP712, AccessControl {
         bytes32 structHash = keccak256(abi.encode(TRANSFER_BALANCE_TYPEHASH, recipientAddress, nonce));
 
         if (!validateUserOp(structHash, signature, nonce)) {
-            revert Errors.InvalidSignature(structHash, nonce);
+            revert Errors.InvalidMachineOwnerSignature(structHash, nonce);
         }
         usedNonces[nonce] = true;
 
