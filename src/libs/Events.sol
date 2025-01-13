@@ -2,10 +2,8 @@
 pragma solidity 0.8.25;
 
 library Events {
-    event MachineTransactionExecuted(
-        address indexed sender, address indexed machineAddress, address target, bytes functionCalldata
-    );
-    event MachineBatchTransactionExecuted(address indexed sender, address indexed machineAddress, address[] targets);
+    event MachineTransactionExecuted(address indexed sender, address indexed machineAddress, address target);
+    event MachineBatchTransactionExecuted(address indexed machineAddress, uint256 index, bool result);
     event MachineBalanceTransferred(
         address indexed machineAddress, address indexed recipientAddress, uint256 amount, uint256 nonce
     );
