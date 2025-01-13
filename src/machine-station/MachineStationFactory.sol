@@ -49,7 +49,7 @@ contract MachineStationFactory is EIP712, AccessControl {
         _grantRole(REQUIRED_STORAGE_DEPOSIT_FEE_ROLE, Constants.PEAQ_STORAGE);
     }
 
-    function changeOwner(uint256 newStorageDepositFee) external onlyRole(STATION_MANAGER_ROLE) {
+    function changeStorageDepositFee(uint256 newStorageDepositFee) external onlyRole(STATION_MANAGER_ROLE) {
         storageDepositFee = newStorageDepositFee;
         emit Events.StorageDepositFeeChanged(newStorageDepositFee);
     }
