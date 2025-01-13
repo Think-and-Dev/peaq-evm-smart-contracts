@@ -13,9 +13,6 @@ contract MachineSmartAccount is EIP712, AccessControl {
     using SafeERC20 for IERC20;
 
     address public owner;
-    // Batch call value
-    uint256[] batch_call_value;
-    uint64[] gas_limit_value;
 
     bytes32 public constant MACHINE_STATION_ROLE = keccak256("MACHINE_STATION_ROLE");
 
