@@ -34,10 +34,10 @@ contract MachineStationFactory is EIP712, AccessControl {
     );
 
     bytes32 private constant EXECUTE_MACHINE_TRANSFER_TYPEHASH =
-        keccak256("ExecutexecuteMachineTransferBalance(address machineAddress,address recipientAddress,uint256 nonce");
+        keccak256("ExecuteMachineTransferBalance(address machineAddress,address recipientAddress,uint256 nonce)");
 
     mapping(uint256 => bool) private usedNonces;
-    uint256 private storageDepositFee = 330000000000000000; // 0.33 tokens in 18 decimals;
+    uint256 private storageDepositFee = 5000000000000000; // 0.005 tokens in 18 decimals;
 
     constructor(address admin, address stationManager) EIP712("MachineStationFactory", "1") {
         if (admin == address(0)) revert Errors.ZeroAddress();
@@ -178,9 +178,9 @@ contract MachineStationFactory is EIP712, AccessControl {
             // Check if the machine balance is less than min balance before funding it
             // This is added because each machine account is required to pay a storage deposit fees by the peaq storage, rbac and did contracts
             // while using the on-chain storage
-            if (machineBalance <= Constants.AGUNG_MIN_BALANCE) {
+            if (machineBalance <= Constants.MIN_BALANCE) {
                 // Fund the machine adress balance
-                IERC20(Constants.FUNDING_TOKEN).safeTransfer(machineAddress, Constants.AGUNG_FUNDING_AMOUNT);
+                IERC20(Constants.FUNDING_TOKEN).safeTransfer(machineAddress, Constants.FUNDING_AMOUNT);
             }
         }
 
@@ -204,9 +204,9 @@ contract MachineStationFactory is EIP712, AccessControl {
         bytes calldata signature,
         bytes calldata machineOwnerSignature
     ) external onlyRole(STATION_MANAGER_ROLE) {
-        if (machineAddress == address(0)) revert Errors.ZeroAddress();
-        if (targets.length < 1) revert Errors.ZeroAddress();
-        if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce);
+        if (machineAddress == address(0)) revert Errors.ZeroAddress(); // Machine address cannot be zero
+        if (targets.length < 1) revert Errors.ZeroAddress(); // Target addresses cannot be zero
+        if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
 
         // Verify the owner's signature
         bytes32 structHash = keccak256(
@@ -220,7 +220,7 @@ contract MachineStationFactory is EIP712, AccessControl {
         );
 
         if (!_verifySignature(structHash, signature, nonce)) {
-            revert Errors.InvalidOwnerSignature(structHash, nonce);
+            revert Errors.InvalidOwnerSignature(structHash, nonce); // Invalid Machine Station Owner signature
         }
 
         usedNonces[nonce] = true;

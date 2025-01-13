@@ -24,7 +24,7 @@ contract MachineSmartAccount is EIP712, AccessControl {
     bytes32 private constant EXECUTE_BATCH_TYPEHASH =
         keccak256("ExecuteBatch(address[] targets,bytes[] data,uint256 nonce)");
     bytes32 private constant TRANSFER_BALANCE_TYPEHASH =
-        keccak256("TransferMachineBalance(address newMachineAddress,uint256 nonce)");
+        keccak256("TransferMachineBalance(address recipientAddress,uint256 nonce)");
 
     mapping(uint256 => bool) public usedNonces;
 

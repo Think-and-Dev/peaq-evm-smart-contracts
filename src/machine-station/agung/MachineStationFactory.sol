@@ -34,7 +34,7 @@ contract MachineStationFactory is EIP712, AccessControl {
     );
 
     bytes32 private constant EXECUTE_MACHINE_TRANSFER_TYPEHASH =
-        keccak256("ExecutexecuteMachineTransferBalance(address machineAddress,address recipientAddress,uint256 nonce");
+        keccak256("ExecuteMachineTransferBalance(address machineAddress,address recipientAddress,uint256 nonce)");
 
     mapping(uint256 => bool) private usedNonces;
     uint256 private storageDepositFee = 330000000000000000; // 0.33 tokens in 18 decimals;
