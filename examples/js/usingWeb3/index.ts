@@ -93,6 +93,41 @@ class MachineStationFactoryExample {
       }
     }
 
+    async submitMachineStorageTx() {
+      try {
+          const eoa = machineOwnerAccount.address; 
+          const nonce = this.getRandomNonce();
+          const target = '0x0000000000000000000000000000000000000801';
+    
+          const abiCoder = new AbiCoder()
+    
+          const addItemFunctionSignature = "addItem(bytes,bytes)";
+          const addItemFunctionSelector = ethers.keccak256(ethers.toUtf8Bytes(addItemFunctionSignature)).substring(0, 10);
+    
+          let now = new Date().getTime();
+    
+          const itemType = "pqdemo_item_type-" + now
+          const itemTypeHex = ethers.hexlify(ethers.toUtf8Bytes(itemType));
+          const item = "peaq demo item storage"
+          const itemHex = ethers.hexlify(ethers.toUtf8Bytes(item));
+    
+          const params = abiCoder.encode(
+              ["bytes", "bytes"],
+              [itemTypeHex, itemHex]
+          );
+    
+          const data = params.replace("0x", addItemFunctionSelector);
+          
+    
+          const eoaSignature = await this.machineOwnerSignTypedDataExecuteMachine(target, data, nonce)
+          const ownerSignature = await this.ownerSignTypedDataExecuteMachineTransaction(machineAddress, target, data, nonce)
+    
+          await this.executeMachineTransaction(machineAddress, target, data, nonce, ownerSignature, eoaSignature);
+      } catch (error) {
+          console.error('Error:', error);
+      }
+    }
+
     async deployMachineSmartAccount(
         machineOwner: string,
         nonce: BigInt,
@@ -271,6 +306,58 @@ class MachineStationFactoryExample {
       }
     }
 
+    async executeMachineTransaction(
+      machineAddress: string,
+      target: string,
+      data: string,
+      nonce: BigInt,
+      signature: string,
+      eoaSignature: string
+  ): Promise<void> {
+    try {
+
+      const methodData = contract.interface.encodeFunctionData(
+        "executeMachineTransaction",
+        [machineAddress, target, data, nonce, signature, eoaSignature]
+      );
+
+      // Send the transaction and get the receipt
+      const txResponse = await this.sendTransaction(methodData);
+      let receipt = await txResponse.wait().finally();
+
+      console.log('Machine Tx executed:', receipt?.hash);
+
+    } catch (error: any) {
+      console.error("Transaction failed. Error:", error);
+
+      // Check if the error is a revert error with data
+      if (error.data) {
+        try {
+          // Decode the revert error using the contract's ABI
+          const iface = new ethers.Interface(contract.interface.fragments);
+          const decodedError = iface.parseError(error.data);
+
+          console.log("Decoded Error:", decodedError);
+
+          // Extract error name and arguments
+          // const { name, args } = decodedError;
+          // console.log("Error Name:", name);
+          // console.log("Arguments:", args);
+
+          // if (name === "InvalidSignature") {
+          //   console.error("InvalidSignature Error Details:");
+          //   console.error("structHash:", args.structHash);
+          //   console.error("nonce:", args.nonce.toString());
+          // }
+        } catch (decodeError) {
+          console.error("Failed to decode error data:", decodeError);
+        }
+      } else {
+        console.error("Transaction failed without revert data:", error);
+      }
+    }     
+  }
+
     async ownerSignTypedDataDeployMachineSmartAccount(
         machineOwner: string,
         nonce: BigInt
@@ -398,6 +485,70 @@ class MachineStationFactoryExample {
       return signature;
     }
 
+    async machineOwnerSignTypedDataExecuteMachine(
+      target: string,
+      data: string,
+      nonce: BigInt,
+    ): Promise<string> {
+      // Step 1: Define the EIP-712 Domain
+      const domain = {
+        name: "MachineSmartAccount", 
+        version: "1", 
+        chainId: chainID,
+        verifyingContract: machineAddress,
+      };
+    
+      const types = {
+        Execute: [
+          { name: "target", type: "address" },
+          { name: "data", type: "bytes" },
+          { name: "nonce", type: "uint256" },
+        ],
+      };
+    
+      const message = {
+        target: target,
+        data: data,
+        nonce: nonce,
+      };
+    
+      const signature = await machineOwnerAccount.signTypedData(domain, types, message);
+      return signature;
+    }
+
+    async ownerSignTypedDataExecuteMachineTransaction(
+      machineAddress: string,
+      target: string,
+      data: string,
+      nonce: BigInt,
+    ): Promise<string> {
+      const domain = {
+        name: "MachineStationFactory", 
+        version: "1", 
+        chainId: chainID,
+        verifyingContract: MachineStationFactoryContractAddress,
+      };
+    
+      const types = {
+        ExecuteMachineTransaction: [
+          { name: "machineAddress", type: "address" },
+          { name: "target", type: "address" },
+          { name: "data", type: "bytes" },
+          { name: "nonce", type: "uint256" },
+        ],
+      };
+  
+      const message = {
+        machineAddress: machineAddress,
+        target: target,
+        data: data,
+        nonce: nonce,
+      };
+    
+      const signature = await ownerAccount.signTypedData(domain, types, message);
+      return signature;
+    }
+
     // Helper function to sign and send transactions
     async sendTransaction(
         methodData: string
@@ -410,7 +561,6 @@ class MachineStationFactoryExample {
       };
 
       return await ownerAccount.sendTransaction(tx);
-
     }
     
     getRandomNonce(): BigInt {
@@ -418,7 +568,6 @@ class MachineStationFactoryExample {
         const randomPart = BigInt(Math.floor(Math.random() * 1e18));
         return now * randomPart;
     }
-    
 }
 
 const machineStationExample = new MachineStationFactoryExample();
@@ -428,6 +577,10 @@ const machineStationExample = new MachineStationFactoryExample();
 
     // deploy machine smart account
     await machineStationExample.submitDeployMachineSmartAccountTx();
+    // submit get real tx
+    await machineStationExample.submitGetRealStorageTx();
+    // submit machine storage tx
+    await machineStationExample.submitMachineStorageTx();
     // Transfer the balance of a machine to a recipient
     await machineStationExample.submitMachineTransferBalanceTx();
     
