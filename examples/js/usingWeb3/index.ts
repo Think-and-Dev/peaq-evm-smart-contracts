@@ -7,7 +7,8 @@ import { Keyring } from '@polkadot/keyring';
 import {abi} from '../MachineStationFactoryABI.json';
 import { AbiCoder, ethers } from 'ethers';
 
-let machineAddress = "" // to be replaced after submitDeployMachineSmartAccountTx is triggered
+let golabalMachineAddress = "0x8D5fd26b338d9f40b48eD21bBd517E0944a12D48"; // to be replaced after submitDeployMachineSmartAccountTx is triggered
+let golabalMachineAddress2 = "0x17420815062B03917bd89430a7eea8bFC84AC1B8"; // to be replaced after submitDeployMachineSmartAccountTx is triggered
 
 // Web3 setup
 // for agung: https://erpc-async.agung.peaq.network
@@ -44,14 +45,15 @@ class MachineStationFactoryExample {
         const deploySignature = await this.ownerSignTypedDataDeployMachineSmartAccount(machineOwner, nonce)
       
         // call the deploy smart account tx and update the global machine address var
-        machineAddress = await this.deployMachineSmartAccount(machineOwner, nonce, deploySignature);
+        golabalMachineAddress = await this.deployMachineSmartAccount(machineOwner, nonce, deploySignature);
     }
 
     async submitMachineTransferBalanceTx() {
+        let machineAddress = golabalMachineAddress;
         const recipientAddress = machineOwnerAccount.address;
         const nonce = this.getRandomNonce();
       
-        const machineOwnerSignature = await this.machineOwnerSignTypedDataTransferMachineBalance(recipientAddress, nonce)
+        const machineOwnerSignature = await this.machineOwnerSignTypedDataTransferMachineBalance(machineAddress, recipientAddress, nonce)
         const ownerSignature = await this.ownerSignTypedDataTransferMachineBalance(machineAddress, recipientAddress, nonce)
       
         console.log("nonce:", nonce);
@@ -93,6 +95,7 @@ class MachineStationFactoryExample {
     async submitMachineStorageTx() {
       try {
           const machineOwner = machineOwnerAccount.address; 
+        let machineAddress = golabalMachineAddress;
           const nonce = this.getRandomNonce();
           const target = '0x0000000000000000000000000000000000000801';
     
@@ -116,7 +119,7 @@ class MachineStationFactoryExample {
           const data = params.replace("0x", addItemFunctionSelector);
           
     
-          const machineOwnerSignature = await this.machineOwnerSignTypedDataExecuteMachine(target, data, nonce)
+          const machineOwnerSignature = await this.machineOwnerSignTypedDataExecuteMachine(machineAddress, target, data, nonce)
           const ownerSignature = await this.ownerSignTypedDataExecuteMachineTransaction(machineAddress, target, data, nonce)
     
           await this.executeMachineTransaction(machineAddress, target, data, nonce, ownerSignature, machineOwnerSignature);
@@ -133,6 +136,9 @@ class MachineStationFactoryExample {
 
           let now = new Date().getTime();
 
+          const machineNonces: BigInt[] = [];
+          const machineOwnerSignatures: string[] = [];
+          const machineAddresses: string[] = [golabalMachineAddress, golabalMachineAddress2];
           const targets = ['0x0000000000000000000000000000000000000801','0x0000000000000000000000000000000000000801'];
           const calldata: string[] = [];
 
@@ -144,7 +150,9 @@ class MachineStationFactoryExample {
             const itemTypeHex = ethers.hexlify(ethers.toUtf8Bytes(itemType));
             const item = "peaq demo item storage"
             const itemHex = ethers.hexlify(ethers.toUtf8Bytes(item));
-      
+            
+            let machineNonce = this.getRandomNonce()
+
             const params = abiCoder.encode(
                 ["bytes", "bytes"],
                 [itemTypeHex, itemHex]
@@ -152,12 +160,15 @@ class MachineStationFactoryExample {
       
             let data = params.replace("0x", addItemFunctionSelector);
             calldata.push(data);
+            machineNonces.push(machineNonce);
+            const machineOwnerSignature = await this.machineOwnerSignTypedDataExecuteMachineBatch(machineAddresses[index], targets, calldata, machineNonce)
+
+            machineOwnerSignatures.push(machineOwnerSignature);
           }
           
-          const machineOwnerSignature = await this.machineOwnerSignTypedDataExecuteMachineBatch(targets, calldata, nonce)
-          const ownerSignature = await this.ownerSignTypedDataExecuteMachineBatchTransactions(machineAddress, targets, calldata, nonce)
+          const ownerSignature = await this.ownerSignTypedDataExecuteMachineBatchTransactions(machineAddresses, targets, calldata, nonce, machineNonces)
     
-          await this.executeMachineBatchTransactions(machineAddress, targets, calldata, nonce, ownerSignature, machineOwnerSignature);
+          await this.executeMachineBatchTransactions(machineOwnerSignatures, targets, calldata, nonce, machineNonces, ownerSignature, machineOwnerSignatures);
       } catch (error) {
           console.error('Error:', error);
       }
@@ -167,7 +178,7 @@ class MachineStationFactoryExample {
       try {
         const nonce = this.getRandomNonce(); // Example nonce
         const target = "0x0000000000000000000000000000000000000800"; // target contract address - DID contract address
-    
+        const machineAddress = golabalMachineAddress;
         const abiCoder = new AbiCoder();
     
         const addAttributeFunctionSignature =
@@ -197,7 +208,7 @@ class MachineStationFactoryExample {
     
         const calldata = params.replace("0x", createDidFunctionSelector);
     
-        const machineOwnerSignature = await this.machineOwnerSignTypedDataExecuteMachine(target, calldata, nonce);
+        const machineOwnerSignature = await this.machineOwnerSignTypedDataExecuteMachine(machineAddress, target, calldata, nonce);
         const ownerSignature = await this.ownerSignTypedDataExecuteMachineTransaction(machineAddress, target, calldata, nonce);
     
         await this.executeMachineTransaction(
@@ -444,18 +455,19 @@ class MachineStationFactoryExample {
   }
 
   async executeMachineBatchTransactions(
-    machineAddress: string,
+    machineAddresses: string[],
     targets: string[],
     data: string[],
     nonce: BigInt,
+    machineNonces: BigInt[],
     signature: string,
-    machineOwnerSignature: string
+    machineOwnerSignatures: string[]
   ): Promise<void> {
     try {
 
       const methodData = contract.interface.encodeFunctionData(
         "executeMachineBatchTransactions",
-        [machineAddress, targets, data, nonce, signature, machineOwnerSignature]
+        [machineAddresses, targets, data, nonce, machineNonces, signature, machineOwnerSignatures]
       );
 
       // Send the transaction and get the receipt
@@ -566,6 +578,7 @@ class MachineStationFactoryExample {
     }
     
     async machineOwnerSignTypedDataTransferMachineBalance(
+      machineAddress: string,
         recipientAddress: string,
         nonce: BigInt,
       ): Promise<string> {
@@ -626,6 +639,7 @@ class MachineStationFactoryExample {
     }
 
     async machineOwnerSignTypedDataExecuteMachine(
+      machineAddress: string,
       target: string,
       data: string,
       nonce: BigInt,
@@ -690,6 +704,7 @@ class MachineStationFactoryExample {
     }
 
     async machineOwnerSignTypedDataExecuteMachineBatch(
+      machineAddress: string,
       targets: string[],
       data: string[],
       nonce: BigInt,
@@ -720,11 +735,12 @@ class MachineStationFactoryExample {
     }
 
     async ownerSignTypedDataExecuteMachineBatchTransactions(
-      machineAddress: string,
+      machineAddresses: string[],
       targets: string[],
       data: string[],
       nonce: BigInt,
-    ): Promise<string> {
+    machineNonces: BigInt[],
+  ): Promise<string> {
       const domain = {
         name: "MachineStationFactory", 
         version: "1", 
@@ -734,18 +750,20 @@ class MachineStationFactoryExample {
     
       const types = {
         ExecuteMachineBatchTransactions: [
-          { name: "machineAddress", type: "address" },
+          { name: "machineAddresses", type: "address[]" },
           { name: "targets", type: "address[]" },
           { name: "data", type: "bytes[]" },
           { name: "nonce", type: "uint256" },
+          { name: "machineNonces", type: "uint256[]" },
         ],
       };
   
       const message = {
-        machineAddress: machineAddress,
+        machineAddresses: machineAddresses,
         targets: targets,
         data: data,
         nonce: nonce,
+        machineNonces: machineNonces,
       };
     
     
