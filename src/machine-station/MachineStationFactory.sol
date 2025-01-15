@@ -301,8 +301,6 @@ contract MachineStationFactory is EIP712, AccessControl {
                 IERC20(Constants.FUNDING_TOKEN).safeTransfer(machineAddress, Constants.FUNDING_AMOUNT);
             }
         }
-
-        return;
     }
 
     // Note: "Unable to determine contract standard" error is throw during native token transfer
