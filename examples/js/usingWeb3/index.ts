@@ -7,8 +7,8 @@ import { Keyring } from '@polkadot/keyring';
 import {abi} from '../MachineStationFactoryABI.json';
 import { AbiCoder, ethers } from 'ethers';
 
-let golabalMachineAddress = "0x8D5fd26b338d9f40b48eD21bBd517E0944a12D48"; // to be replaced after submitDeployMachineSmartAccountTx is triggered
-let golabalMachineAddress2 = "0x17420815062B03917bd89430a7eea8bFC84AC1B8"; // to be replaced after submitDeployMachineSmartAccountTx is triggered
+let globalMachineAddress = "0x8D5fd26b338d9f40b48eD21bBd517E0944a12D48"; // to be replaced after submitDeployMachineSmartAccountTx is triggered
+let globalMachineAddress2 = "0x17420815062B03917bd89430a7eea8bFC84AC1B8"; // to be replaced after submitDeployMachineSmartAccountTx is triggered
 
 // Web3 setup
 // for agung: https://erpc-async.agung.peaq.network
@@ -45,11 +45,11 @@ class MachineStationFactoryExample {
         const deploySignature = await this.ownerSignTypedDataDeployMachineSmartAccount(machineOwner, nonce)
       
         // call the deploy smart account tx and update the global machine address var
-        golabalMachineAddress = await this.deployMachineSmartAccount(machineOwner, nonce, deploySignature);
+        globalMachineAddress = await this.deployMachineSmartAccount(machineOwner, nonce, deploySignature);
     }
 
     async submitMachineTransferBalanceTx() {
-        let machineAddress = golabalMachineAddress;
+        let machineAddress = globalMachineAddress;
         const recipientAddress = machineOwnerAccount.address;
         const nonce = this.getRandomNonce();
       
@@ -95,7 +95,7 @@ class MachineStationFactoryExample {
     async submitMachineStorageTx() {
       try {
           const machineOwner = machineOwnerAccount.address; 
-        let machineAddress = golabalMachineAddress;
+        let machineAddress = globalMachineAddress;
           const nonce = this.getRandomNonce();
           const target = '0x0000000000000000000000000000000000000801';
     
@@ -138,7 +138,7 @@ class MachineStationFactoryExample {
 
           const machineNonces: BigInt[] = [];
           const machineOwnerSignatures: string[] = [];
-          const machineAddresses: string[] = [golabalMachineAddress, golabalMachineAddress2];
+          const machineAddresses: string[] = [globalMachineAddress, globalMachineAddress2];
           const targets = ['0x0000000000000000000000000000000000000801','0x0000000000000000000000000000000000000801'];
           const calldata: string[] = [];
 
@@ -178,7 +178,7 @@ class MachineStationFactoryExample {
       try {
         const nonce = this.getRandomNonce(); // Example nonce
         const target = "0x0000000000000000000000000000000000000800"; // target contract address - DID contract address
-        const machineAddress = golabalMachineAddress;
+        const machineAddress = globalMachineAddress;
         const abiCoder = new AbiCoder();
     
         const addAttributeFunctionSignature =

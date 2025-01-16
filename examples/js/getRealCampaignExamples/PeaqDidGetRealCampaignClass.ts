@@ -446,8 +446,6 @@ class PeaqGetRealCampaignClass {
 
 }
 
-
-
 // Main function to create DID
 const createDid = async () => {
     const campaignClass = new PeaqGetRealCampaignClass();
