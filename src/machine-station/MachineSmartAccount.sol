@@ -12,7 +12,7 @@ import {Constants} from "../libs/Constants.sol";
 contract MachineSmartAccount is EIP712, AccessControl {
     using SafeERC20 for IERC20;
 
-    address public owner;
+    address public immutable owner;
 
     bytes32 public constant MACHINE_STATION_ROLE = keccak256("MACHINE_STATION_ROLE");
 
