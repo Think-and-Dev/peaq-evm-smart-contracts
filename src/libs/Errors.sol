@@ -9,8 +9,8 @@ library Errors {
     error TransferFailed(address token, address recipient, uint256 amount);
     error NotAuthorized(address caller);
     error TargetCallFailed(address target);
-    error MaxBatchTransactionExceeded(address[] targets);
     error InvalidMachineAddressTargetsDataLength();
     error InvalidMachineAddressNonceSignatureLength();
     error EmptyAddressesArray();
+    error MaxBatchTransactionExceeded(uint256 max, uint256 got);
 }

@@ -8,6 +8,7 @@ library Constants {
     address constant PEAQ_RBAC = address(0x0000000000000000000000000000000000000802); // peaq RBAC contract address
     address constant PEAQ_DID = address(0x0000000000000000000000000000000000000800); // peaq DID contract address
     address constant PEAQ_STORAGE = address(0x0000000000000000000000000000000000000801); // peaq storage contract address
+    uint256 public constant MAX_BATCH_TRANSACTIONS = 200;
 
     // agung specific constants
     uint256 constant AGUNG_MIN_BALANCE = 330000000000000000; // 0.33 tokens in 18 decimals

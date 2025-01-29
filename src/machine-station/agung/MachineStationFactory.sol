@@ -202,6 +202,9 @@ contract MachineStationFactory is EIP712, AccessControl, ReentrancyGuard {
         {
             revert Errors.InvalidMachineAddressNonceSignatureLength();
         }
+        if (targets.length > Constants.MAX_BATCH_TRANSACTIONS) {
+            revert Errors.MaxBatchTransactionExceeded(Constants.MAX_BATCH_TRANSACTIONS, targets.length);
+        }
         // Verify the owner's signature
         bytes32 structHash = keccak256(
             abi.encode(

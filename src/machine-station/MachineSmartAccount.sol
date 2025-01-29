@@ -99,6 +99,9 @@ contract MachineSmartAccount is EIP712, AccessControl, ReentrancyGuard {
         if (targets.length != data.length) {
             revert Errors.InvalidMachineAddressTargetsDataLength();
         }
+        if (targets.length > Constants.MAX_BATCH_TRANSACTIONS) {
+            revert Errors.MaxBatchTransactionExceeded(Constants.MAX_BATCH_TRANSACTIONS, targets.length);
+        }
 
         bytes32 dataHash = _hashData(data);
 
