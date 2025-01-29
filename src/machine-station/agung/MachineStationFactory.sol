@@ -13,6 +13,7 @@ import {Constants} from "../../libs/Constants.sol";
 contract MachineStationFactory is EIP712, AccessControl {
     using SafeERC20 for IERC20;
 
+    bytes32 public constant STATION_ADMIN_ROLE = keccak256("STATION_ADMIN_ROLE");
     bytes32 public constant STATION_MANAGER_ROLE = keccak256("STATION_MANAGER_ROLE");
     bytes32 public constant REQUIRED_STORAGE_DEPOSIT_FEE_ROLE = keccak256("REQUIRED_STORAGE_DEPOSIT_FEE_ROLE");
 
@@ -42,6 +43,7 @@ contract MachineStationFactory is EIP712, AccessControl {
         if (admin == address(0)) revert Errors.ZeroAddress();
         if (stationManager == address(0)) revert Errors.ZeroAddress();
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
+        _grantRole(STATION_ADMIN_ROLE, admin);
         _grantRole(STATION_MANAGER_ROLE, stationManager);
         _grantRole(REQUIRED_STORAGE_DEPOSIT_FEE_ROLE, Constants.PEAQ_DID);
         _grantRole(REQUIRED_STORAGE_DEPOSIT_FEE_ROLE, Constants.PEAQ_RBAC);
@@ -274,7 +276,7 @@ contract MachineStationFactory is EIP712, AccessControl {
         bytes32 digest = _hashTypedDataV4(structHash);
         address signer = ECDSA.recover(digest, signature);
 
-        return hasRole(DEFAULT_ADMIN_ROLE, signer);
+        return (hasRole(DEFAULT_ADMIN_ROLE, signer) || hasRole(STATION_ADMIN_ROLE, signer));
     }
 
     /**
