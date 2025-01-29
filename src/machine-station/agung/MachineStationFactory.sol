@@ -38,7 +38,7 @@ contract MachineStationFactory is EIP712, AccessControl, ReentrancyGuard {
     bytes32 private constant EXECUTE_MACHINE_TRANSFER_TYPEHASH =
         keccak256("ExecuteMachineTransferBalance(address machineAddress,address recipientAddress,uint256 nonce)");
 
-    mapping(uint256 => bool) private usedNonces;
+    mapping(uint256 => bool) public usedNonces;
 
     constructor(address admin, address stationManager) EIP712("MachineStationFactory", "1") {
         if (admin == address(0)) revert Errors.ZeroAddress();
