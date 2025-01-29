@@ -5,12 +5,13 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {MachineSmartAccount} from "../MachineSmartAccount.sol";
 import {Errors} from "../../libs/Errors.sol";
 import {Events} from "../../libs/Events.sol";
 import {Constants} from "../../libs/Constants.sol";
 
-contract MachineStationFactory is EIP712, AccessControl {
+contract MachineStationFactory is EIP712, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     bytes32 public constant STATION_ADMIN_ROLE = keccak256("STATION_ADMIN_ROLE");
@@ -57,6 +58,7 @@ contract MachineStationFactory is EIP712, AccessControl {
      */
     function deployMachineSmartAccount(address machineOwner, uint256 nonce, bytes calldata signature)
         external
+        nonReentrant
         onlyRole(STATION_MANAGER_ROLE)
         returns (address)
     {
@@ -84,6 +86,7 @@ contract MachineStationFactory is EIP712, AccessControl {
      */
     function transferMachineStationBalance(address newMachineStationAddress, uint256 nonce, bytes calldata signature)
         external
+        nonReentrant
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         if (Constants.FUNDING_TOKEN == address(0)) revert Errors.ZeroAddress();
@@ -114,6 +117,7 @@ contract MachineStationFactory is EIP712, AccessControl {
      */
     function executeTransaction(address target, bytes calldata data, uint256 nonce, bytes calldata signature)
         external
+        nonReentrant
         onlyRole(STATION_MANAGER_ROLE)
     {
         if (target == address(0)) revert Errors.ZeroAddress();
@@ -150,7 +154,7 @@ contract MachineStationFactory is EIP712, AccessControl {
         uint256 nonce,
         bytes calldata signature,
         bytes calldata machineOwnerSignature
-    ) external onlyRole(STATION_MANAGER_ROLE) {
+    ) external nonReentrant onlyRole(STATION_MANAGER_ROLE) {
         if (machineAddress == address(0)) revert Errors.ZeroAddress(); // Machine address cannot be zero
         if (target == address(0)) revert Errors.ZeroAddress(); // Target address cannot be zero
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
@@ -187,14 +191,15 @@ contract MachineStationFactory is EIP712, AccessControl {
         uint256[] memory machineNonces,
         bytes calldata signature,
         bytes[] calldata machineOwnerSignatures
-    ) external onlyRole(STATION_MANAGER_ROLE) {
+    ) external nonReentrant onlyRole(STATION_MANAGER_ROLE) {
         if (machineAddresses.length < 1) revert Errors.EmptyAddressesArray(); // Machine address cannot be empty
         if (targets.length < 1) revert Errors.EmptyAddressesArray(); // Target addresses cannot be empty
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
         if (machineAddresses.length != targets.length || machineAddresses.length != data.length) {
             revert Errors.InvalidMachineAddressTargetsDataLength();
         }
-        if (machineAddresses.length != machineNonces.length || machineAddresses.length != machineOwnerSignatures.length) {
+        if (machineAddresses.length != machineNonces.length || machineAddresses.length != machineOwnerSignatures.length)
+        {
             revert Errors.InvalidMachineAddressNonceSignatureLength();
         }
         // Verify the owner's signature
@@ -241,7 +246,7 @@ contract MachineStationFactory is EIP712, AccessControl {
         uint256 nonce,
         bytes calldata signature,
         bytes calldata machineOwnerSignature
-    ) external onlyRole(STATION_MANAGER_ROLE) {
+    ) external nonReentrant onlyRole(STATION_MANAGER_ROLE) {
         if (machineAddress == address(0)) revert Errors.ZeroAddress(); // Machine address cannot be zero
         if (recipientAddress == address(0)) revert Errors.ZeroAddress(); // recipient address cannot be zero
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
