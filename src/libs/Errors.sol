@@ -11,4 +11,5 @@ library Errors {
     error TargetCallFailed(address target);
     error MaxBatchTransactionExceeded(address[] targets);
     error InvalidMachineAddressTargetsDataLength();
+    error InvalidMachineAddressNonceSignatureLength();
 }

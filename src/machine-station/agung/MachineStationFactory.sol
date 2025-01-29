@@ -192,6 +192,9 @@ contract MachineStationFactory is EIP712, AccessControl {
         if (machineAddresses.length != targets.length || machineAddresses.length != data.length) {
             revert Errors.InvalidMachineAddressTargetsDataLength();
         }
+        if (machineAddresses.length != machineNonces.length || machineAddresses.length != machineOwnerSignatures.length) {
+            revert Errors.InvalidMachineAddressNonceSignatureLength();
+        }
         // Verify the owner's signature
         bytes32 structHash = keccak256(
             abi.encode(

@@ -90,8 +90,10 @@ contract MachineSmartAccount is EIP712, AccessControl {
         if (!hasRole(MACHINE_STATION_ROLE, msg.sender) && msg.sender != owner) {
             revert Errors.NotAuthorized(msg.sender);
         }
-
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
+        if (targets.length != data.length) {
+            revert Errors.InvalidMachineAddressTargetsDataLength();
+        }
 
         bytes32 dataHash = _hashData(data);
 
