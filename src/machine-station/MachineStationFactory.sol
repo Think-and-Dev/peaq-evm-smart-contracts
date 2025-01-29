@@ -188,8 +188,8 @@ contract MachineStationFactory is EIP712, AccessControl {
         bytes calldata signature,
         bytes[] calldata machineOwnerSignatures
     ) external onlyRole(STATION_MANAGER_ROLE) {
-        if (machineAddresses.length < 1) revert Errors.ZeroAddress(); // Machine address cannot be zero
-        if (targets.length < 1) revert Errors.ZeroAddress(); // Target addresses cannot be zero
+        if (machineAddresses.length < 1) revert Errors.EmptyAddressesArray(); // Machine address cannot be empty
+        if (targets.length < 1) revert Errors.EmptyAddressesArray(); // Target addresses cannot be empty
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
         if (machineAddresses.length != targets.length || machineAddresses.length != data.length) {
             revert Errors.InvalidMachineAddressTargetsDataLength();
