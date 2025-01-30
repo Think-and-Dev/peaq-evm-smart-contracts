@@ -5,14 +5,16 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {IERC20, SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {MachineSmartAccount} from "../MachineSmartAccount.sol";
 import {Errors} from "../../libs/Errors.sol";
 import {Events} from "../../libs/Events.sol";
 import {Constants} from "../../libs/Constants.sol";
 
-contract MachineStationFactory is EIP712, AccessControl {
+contract MachineStationFactory is EIP712, AccessControl, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
+    bytes32 public constant STATION_ADMIN_ROLE = keccak256("STATION_ADMIN_ROLE");
     bytes32 public constant STATION_MANAGER_ROLE = keccak256("STATION_MANAGER_ROLE");
     bytes32 public constant REQUIRED_STORAGE_DEPOSIT_FEE_ROLE = keccak256("REQUIRED_STORAGE_DEPOSIT_FEE_ROLE");
 
@@ -36,12 +38,13 @@ contract MachineStationFactory is EIP712, AccessControl {
     bytes32 private constant EXECUTE_MACHINE_TRANSFER_TYPEHASH =
         keccak256("ExecuteMachineTransferBalance(address machineAddress,address recipientAddress,uint256 nonce)");
 
-    mapping(uint256 => bool) private usedNonces;
+    mapping(uint256 => bool) public usedNonces;
 
     constructor(address admin, address stationManager) EIP712("MachineStationFactory", "1") {
         if (admin == address(0)) revert Errors.ZeroAddress();
         if (stationManager == address(0)) revert Errors.ZeroAddress();
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
+        _grantRole(STATION_ADMIN_ROLE, admin);
         _grantRole(STATION_MANAGER_ROLE, stationManager);
         _grantRole(REQUIRED_STORAGE_DEPOSIT_FEE_ROLE, Constants.PEAQ_DID);
         _grantRole(REQUIRED_STORAGE_DEPOSIT_FEE_ROLE, Constants.PEAQ_RBAC);
@@ -55,6 +58,7 @@ contract MachineStationFactory is EIP712, AccessControl {
      */
     function deployMachineSmartAccount(address machineOwner, uint256 nonce, bytes calldata signature)
         external
+        nonReentrant
         onlyRole(STATION_MANAGER_ROLE)
         returns (address)
     {
@@ -82,6 +86,7 @@ contract MachineStationFactory is EIP712, AccessControl {
      */
     function transferMachineStationBalance(address newMachineStationAddress, uint256 nonce, bytes calldata signature)
         external
+        nonReentrant
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         if (Constants.FUNDING_TOKEN == address(0)) revert Errors.ZeroAddress();
@@ -112,6 +117,7 @@ contract MachineStationFactory is EIP712, AccessControl {
      */
     function executeTransaction(address target, bytes calldata data, uint256 nonce, bytes calldata signature)
         external
+        nonReentrant
         onlyRole(STATION_MANAGER_ROLE)
     {
         if (target == address(0)) revert Errors.ZeroAddress();
@@ -148,7 +154,7 @@ contract MachineStationFactory is EIP712, AccessControl {
         uint256 nonce,
         bytes calldata signature,
         bytes calldata machineOwnerSignature
-    ) external onlyRole(STATION_MANAGER_ROLE) {
+    ) external nonReentrant onlyRole(STATION_MANAGER_ROLE) {
         if (machineAddress == address(0)) revert Errors.ZeroAddress(); // Machine address cannot be zero
         if (target == address(0)) revert Errors.ZeroAddress(); // Target address cannot be zero
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
@@ -185,12 +191,19 @@ contract MachineStationFactory is EIP712, AccessControl {
         uint256[] memory machineNonces,
         bytes calldata signature,
         bytes[] calldata machineOwnerSignatures
-    ) external onlyRole(STATION_MANAGER_ROLE) {
-        if (machineAddresses.length < 1) revert Errors.ZeroAddress(); // Machine address cannot be zero
-        if (targets.length < 1) revert Errors.ZeroAddress(); // Target addresses cannot be zero
+    ) external nonReentrant onlyRole(STATION_MANAGER_ROLE) {
+        if (machineAddresses.length < 1) revert Errors.EmptyAddressesArray(); // Machine address cannot be empty
+        if (targets.length < 1) revert Errors.EmptyAddressesArray(); // Target addresses cannot be empty
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
         if (machineAddresses.length != targets.length || machineAddresses.length != data.length) {
             revert Errors.InvalidMachineAddressTargetsDataLength();
+        }
+        if (machineAddresses.length != machineNonces.length || machineAddresses.length != machineOwnerSignatures.length)
+        {
+            revert Errors.InvalidMachineAddressNonceSignatureLength();
+        }
+        if (targets.length > Constants.MAX_BATCH_TRANSACTIONS) {
+            revert Errors.MaxBatchTransactionExceeded(Constants.MAX_BATCH_TRANSACTIONS, targets.length);
         }
         // Verify the owner's signature
         bytes32 structHash = keccak256(
@@ -236,7 +249,7 @@ contract MachineStationFactory is EIP712, AccessControl {
         uint256 nonce,
         bytes calldata signature,
         bytes calldata machineOwnerSignature
-    ) external onlyRole(STATION_MANAGER_ROLE) {
+    ) external nonReentrant onlyRole(STATION_MANAGER_ROLE) {
         if (machineAddress == address(0)) revert Errors.ZeroAddress(); // Machine address cannot be zero
         if (recipientAddress == address(0)) revert Errors.ZeroAddress(); // recipient address cannot be zero
         if (usedNonces[nonce]) revert Errors.NonceAlreadyUsed(nonce); // Nonce already used
@@ -271,7 +284,7 @@ contract MachineStationFactory is EIP712, AccessControl {
         bytes32 digest = _hashTypedDataV4(structHash);
         address signer = ECDSA.recover(digest, signature);
 
-        return hasRole(DEFAULT_ADMIN_ROLE, signer);
+        return (hasRole(DEFAULT_ADMIN_ROLE, signer) || hasRole(STATION_ADMIN_ROLE, signer));
     }
 
     /**
