@@ -13,4 +13,5 @@ library Errors {
     error InvalidMachineAddressNonceSignatureLength();
     error EmptyAddressesArray();
     error MaxBatchTransactionExceeded(uint256 max, uint256 got);
+    error InsufficientFactoryBalance(uint256 balance, uint256 amount);
 }
