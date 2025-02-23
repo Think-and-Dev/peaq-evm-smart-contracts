@@ -8,7 +8,7 @@ library Errors {
     error InvalidMachineOwnerSignature(bytes32 messageHash, uint256 nonce);
     error TransferFailed(address token, address recipient, uint256 amount);
     error NotAuthorized(address caller);
-    error TargetCallFailed(address target);
+    error TargetCallFailed(address target, bytes data);
     error InvalidMachineAddressTargetsDataLength();
     error InvalidMachineAddressNonceSignatureLength();
     error EmptyAddressesArray();
